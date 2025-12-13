@@ -106,5 +106,7 @@ namespace REPX.Data
 
 		// Token: 0x04000056 RID: 86
 		public Color c_ItemEspColor = Color.cyan;
+
+		public Color c_CartEspColor = Color.yellow;
 	}
 }

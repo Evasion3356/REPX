@@ -94,10 +94,21 @@ namespace REPX.Cheats
 						bool flag3 = physGrabObject == null;
 						if (!flag3)
 						{
-							bool flag4 = !physGrabObject.GetField<bool>("isValuable") && !physGrabObject.GetField<bool>("isCart");
-							if (!flag4)
+							if (physGrabObject.GetField<bool>("isValuable"))
 							{
-								EspCheat.RenderEspElement(physGrabObject.centerPoint, Settings.Instance.SettingsData.b_ItemNameEsp ? physGrabObject.name.Replace("(Clone)", "") : string.Empty, Settings.Instance.SettingsData.c_ItemEspColor, cam, Settings.Instance.SettingsData.f_EspRange, Settings.Instance.SettingsData.b_Tracer);
+								var name = physGrabObject.name.Replace("(Clone)", "");
+								var color = Settings.Instance.SettingsData.c_ItemEspColor;
+								var draw_name = Settings.Instance.SettingsData.b_ItemNameEsp ? name : string.Empty;
+								EspCheat.RenderEspElement(physGrabObject.centerPoint, draw_name, color, cam, Settings.Instance.SettingsData.f_EspRange, Settings.Instance.SettingsData.b_Tracer);
+							}
+							if (physGrabObject.GetField<bool>("isCart"))
+							{
+								PhysGrabCart cart = physGrabObject.GetComponent<PhysGrabCart>();
+								int cartValue = cart.GetField<int>("haulCurrent");
+								var name = physGrabObject.name.Replace("(Clone)", "");
+								var color = Settings.Instance.SettingsData.c_CartEspColor;
+								var draw_name = Settings.Instance.SettingsData.b_ItemNameEsp ? string.Format("{0} ${1:N0}", name, cartValue) : string.Empty;
+								EspCheat.RenderEspElement(physGrabObject.centerPoint, draw_name, color, cam, Settings.Instance.SettingsData.f_EspRange, Settings.Instance.SettingsData.b_Tracer);
 							}
 						}
 					}

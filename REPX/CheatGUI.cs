@@ -60,6 +60,11 @@ namespace REPX
 
 		private void OnGUI()
 		{
+			bool isScreenshotting = Input.GetKey(KeyCode.F12) /*|| Input.GetKey(KeyCode.Print)*/;
+			if (isScreenshotting)
+			{
+				return;
+			}
 			bool flag = !this._initialized;
 			if (!flag)
 			{
@@ -970,6 +975,7 @@ namespace REPX
 				UI.ColorPicker(ref this._settingsData.c_PlayerEspColor, "Player Esp Color");
 				UI.ColorPicker(ref this._settingsData.c_EnemyEspColor, "Enemy Esp Color");
 				UI.ColorPicker(ref this._settingsData.c_ItemEspColor, "Item Esp Color");
+				UI.ColorPicker(ref this._settingsData.c_CartEspColor, "Cart Esp Color");
 			}
 		}
 
