@@ -1,0 +1,1013 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using HarmonyLib;
+using Photon.Pun;
+using Photon.Realtime;
+using REPX.Cheats;
+using REPX.Data;
+using REPX.Extensions;
+using REPX.Helpers;
+using UnityEngine;
+
+namespace REPX
+{
+	internal class CheatGUI : MonoBehaviour
+	{
+		internal static CheatGUI Instance { get; private set; }
+
+		private void Awake()
+		{
+			bool flag = CheatGUI.harmony == null;
+			if (flag)
+			{
+				CheatGUI.harmony = new Harmony(CheatGUI.GUID);
+				Harmony harmony = CheatGUI.harmony;
+				if (harmony != null)
+				{
+					harmony.PatchAll();
+				}
+			}
+			bool flag2 = CheatGUI.Instance != null && CheatGUI.Instance != this;
+			if (flag2)
+			{
+				UnityEngine.Object.Destroy(this);
+			}
+			else
+			{
+				CheatGUI.Instance = this;
+				this.Initialize();
+			}
+		}
+
+		private void OnDestroy()
+		{
+			this._initialized = false;
+			Harmony harmony = CheatGUI.harmony;
+			if (harmony != null)
+			{
+				harmony.UnpatchAll(CheatGUI.GUID);  // Changed from UnpatchSelf()
+			}
+			this._settingsData = null;
+		}
+
+		private void Initialize()
+		{
+			this._settingsData = Settings.Instance.SettingsData;
+			this._initialized = true;
+		}
+
+		private void OnGUI()
+		{
+			bool flag = !this._initialized;
+			if (!flag)
+			{
+				if (this._style == null)
+				{
+					this._style = new GUIStyle(GUI.skin.label)
+					{
+						normal =
+						{
+							textColor = Color.white
+						},
+						fontStyle = FontStyle.Bold
+					};
+				}
+				this.DrawWatermark();
+				bool flag2 = Settings.Instance != null && Settings.Instance.b_IsMenuOpen;
+				if (flag2)
+				{
+					Settings.Instance.WindowRect = GUILayout.Window(0, Settings.Instance.WindowRect, new GUI.WindowFunction(this.MenuContent), "REPX", Array.Empty<GUILayoutOption>());
+				}
+				bool flag3 = !SemiFunc.IsMainMenu() && !SemiFunc.RunIsLobbyMenu() && !LoadingUI.instance.gameObject.activeSelf;
+				if (flag3)
+				{
+					EspCheat.RenderEsp();
+				}
+			}
+		}
+
+		private void Update()
+		{
+			this.MenuUpdate();
+			this.SelectedPlayerUpdate();
+			bool flag = SemiFunc.IsMainMenu();
+			if (flag)
+			{
+				this._shakeScreen = false;
+				this._deathLoop = false;
+				this._spamChatMessage = false;
+				this._fakeLag = false;
+				bool flag2 = this._lagLastPos.Count > 0;
+				if (flag2)
+				{
+					this._lagLastPos.Clear();
+				}
+			}
+			try
+			{
+				TriggerCheat.GetMonoTrigger();
+			}
+			catch (Exception ex)
+			{
+				Log.LogError(ex);
+			}
+		}
+
+		private void MenuUpdate()
+		{
+			bool b_IsMenuOpen = Settings.Instance.b_IsMenuOpen;
+			bool flag = b_IsMenuOpen;
+			if (flag)
+			{
+				bool flag2 = !Cursor.visible;
+				if (flag2)
+				{
+					Cursor.visible = true;
+				}
+				bool flag3 = Cursor.lockState == CursorLockMode.Locked;
+				if (flag3)
+				{
+					Cursor.lockState = CursorLockMode.None;
+				}
+			}
+			bool keyDown = Input.GetKeyDown(KeyCode.Insert);
+			if (keyDown)
+			{
+				Settings.Instance.b_IsMenuOpen = !b_IsMenuOpen;
+				this.UpdateCursorState();
+			}
+		}
+
+		private void SelectedPlayerUpdate()
+		{
+			float deltaTime = Time.deltaTime;
+			bool flag = this._playerSel == 0;
+			List<PlayerAvatar> playerList = GameDirector.instance.PlayerList;
+			bool flag2 = playerList.Count > 0;
+			if (flag2)
+			{
+				List<PlayerAvatar> list;
+				if (!flag)
+				{
+					(list = new List<PlayerAvatar>(1)).Add(playerList.ElementAt(this._playerSel - 1));
+				}
+				else
+				{
+					list = GameDirector.instance.PlayerList;
+				}
+				List<PlayerAvatar> list2 = list;
+				bool fakeLag = this._fakeLag;
+				if (fakeLag)
+				{
+					this._fakeLagTime += deltaTime;
+					foreach (PlayerAvatar playerAvatar in list2)
+					{
+						bool flag3 = this._fakeLagTime > this._lagInterval * 0.75f;
+						if (flag3)
+						{
+							bool flag4 = !this._lagLastPos.ContainsKey(playerAvatar);
+							if (flag4)
+							{
+								this._lagLastPos[playerAvatar] = playerAvatar.transform.position;
+							}
+						}
+						bool flag5 = this._fakeLagTime > this._lagInterval;
+						if (flag5)
+						{
+							Vector3 vector;
+							bool flag6 = this._lagLastPos.TryGetValue(playerAvatar, out vector);
+							if (flag6)
+							{
+								playerAvatar.TeleportExploit(vector, null, 0);
+							}
+						}
+					}
+					bool flag7 = this._fakeLagTime > this._lagInterval;
+					if (flag7)
+					{
+						this._fakeLagTime = 0f;
+						this._lagLastPos.Clear();
+					}
+				}
+				else
+				{
+					this._fakeLagTime = 0f;
+					bool flag8 = this._lagLastPos.Count > 0;
+					if (flag8)
+					{
+						this._lagLastPos.Clear();
+					}
+				}
+				bool shakeScreen = this._shakeScreen;
+				if (shakeScreen)
+				{
+					foreach (PlayerAvatar playerAvatar2 in list2)
+					{
+						RoundDirector.instance.GetPhotonView("photonView").RPC("ExtractionCompletedAllRPC", playerAvatar2.photonView.Owner, Array.Empty<object>());
+					}
+				}
+				bool deathLoop = this._deathLoop;
+				if (deathLoop)
+				{
+					foreach (PlayerAvatar playerAvatar3 in list2)
+					{
+						bool flag9 = !playerAvatar3.IsDead();
+						if (flag9)
+						{
+							playerAvatar3.PlayerDeath(-1);
+						}
+						else
+						{
+							playerAvatar3.Revive(false);
+						}
+					}
+				}
+				bool flag10 = this._spamChatMessage && this._msgTime > 0.25f;
+				if (flag10)
+				{
+					foreach (PlayerAvatar playerAvatar4 in list2)
+					{
+						bool flag11 = playerAvatar4.GetField<bool>("isCrouching");
+						bool field = playerAvatar4.GetField<bool>("isDisabled");
+						if (field)
+						{
+							flag11 = true;
+						}
+						playerAvatar4.photonView.RPC("ChatMessageSendRPC", RpcTarget.All, new object[] { this._chatMessage, flag11 });
+						this._msgTime = 0f;
+					}
+				}
+				this._msgTime += deltaTime;
+			}
+		}
+
+		private void UpdateCursorState()
+		{
+			bool flag = Settings.Instance == null;
+			if (!flag)
+			{
+				bool b_IsMenuOpen = Settings.Instance.b_IsMenuOpen;
+				CursorLockMode cursorLockMode = (b_IsMenuOpen ? CursorLockMode.None : CursorLockMode.Locked);
+				Cursor.visible = b_IsMenuOpen;
+				bool flag2 = Cursor.lockState != cursorLockMode;
+				if (flag2)
+				{
+					Cursor.lockState = cursorLockMode;
+				}
+			}
+		}
+
+		private void DrawWatermark()
+		{
+			bool flag = this._style == null;
+			if (!flag)
+			{
+				GUI.backgroundColor = new Color(0.09019608f, 0.09019608f, 0.09019608f, 1f);
+				GUI.contentColor = Color.white;
+				SettingsData settingsData = this._settingsData;
+				GUI.color = ((settingsData != null) ? settingsData.c_Theme : Color.white);
+				string text = "REPX";
+				bool flag2 = this._settingsData != null;
+				if (flag2)
+				{
+					text = text + " | v" + CheatGUI.version;
+					bool flag3 = Settings.Instance != null && !Settings.Instance.b_IsMenuOpen;
+					if (flag3)
+					{
+						text += " | Press INSERT";
+					}
+				}
+				GUI.Label(new Rect(10f, 5f, 500f, 25f), text, this._style);
+			}
+		}
+
+		private void MenuContent(int windowID)
+		{
+			bool flag = this._settingsData == null || Settings.Instance == null;
+			if (!flag)
+			{
+				GUI.DragWindow(new Rect(0f, 0f, Settings.Instance.WindowRect.width, 20f));
+				GUILayout.BeginHorizontal(Array.Empty<GUILayoutOption>());
+				UI.Tab<UI.Tabs>("About", ref UI.nTab, UI.Tabs.About, false);
+				UI.Tab<UI.Tabs>("ESP", ref UI.nTab, UI.Tabs.ESP, false);
+				bool flag2 = !SemiFunc.IsMainMenu();
+				if (flag2)
+				{
+					bool flag3 = !SemiFunc.RunIsLobbyMenu();
+					if (flag3)
+					{
+						UI.Tab<UI.Tabs>("Self", ref UI.nTab, UI.Tabs.Self, false);
+					}
+					UI.Tab<UI.Tabs>("Players", ref UI.nTab, UI.Tabs.Players, false);
+					UI.Tab<UI.Tabs>("Level", ref UI.nTab, UI.Tabs.Level, false);
+				}
+				UI.Tab<UI.Tabs>("Misc", ref UI.nTab, UI.Tabs.Misc, false);
+				bool flag4 = !SemiFunc.IsMainMenu();
+				if (flag4)
+				{
+					UI.Tab<UI.Tabs>("Trolling", ref UI.nTab, UI.Tabs.Trolling, false);
+				}
+				UI.Tab<UI.Tabs>("Trigger Cheats", ref UI.nTab, UI.Tabs.TriggerCheat, false);
+				UI.Tab<UI.Tabs>("Settings", ref UI.nTab, UI.Tabs.Settings, false);
+				GUILayout.EndHorizontal();
+				this._menuScrollPos = GUILayout.BeginScrollView(this._menuScrollPos, Array.Empty<GUILayoutOption>());
+				UI.Reset();
+				switch (UI.nTab)
+				{
+					case UI.Tabs.About:
+						this.DrawAboutTab();
+						break;
+					case UI.Tabs.ESP:
+						this.DrawESPTab();
+						break;
+					case UI.Tabs.Self:
+						{
+							bool flag5 = SemiFunc.IsMainMenu() || SemiFunc.RunIsLobbyMenu();
+							if (flag5)
+							{
+								UI.nTab = UI.Tabs.About;
+							}
+							else
+							{
+								this.DrawSelfTab();
+							}
+							break;
+						}
+					case UI.Tabs.Players:
+						{
+							bool flag6 = SemiFunc.IsMainMenu();
+							if (flag6)
+							{
+								UI.nTab = UI.Tabs.About;
+							}
+							else
+							{
+								this.DrawPlayersTab();
+							}
+							break;
+						}
+					case UI.Tabs.Level:
+						this.DrawLevelTab();
+						break;
+					case UI.Tabs.Misc:
+						this.DrawMiscTab();
+						break;
+					case UI.Tabs.Trolling:
+						{
+							bool flag7 = SemiFunc.IsMainMenu();
+							if (flag7)
+							{
+								UI.nTab = UI.Tabs.About;
+							}
+							else
+							{
+								this.DrawTrollingTab();
+							}
+							break;
+						}
+					case UI.Tabs.TriggerCheat:
+						this.DrawTriggerCheatTab();
+						break;
+					case UI.Tabs.Settings:
+						this.DrawSettingsTab();
+						break;
+				}
+				GUILayout.EndScrollView();
+				bool b_Tooltips = this._settingsData.b_Tooltips;
+				if (b_Tooltips)
+				{
+					UI.RenderTooltip();
+				}
+				GUI.DragWindow(new Rect(0f, 0f, 0f, 20f));
+			}
+		}
+
+		private void DrawAboutTab()
+		{
+			string text = "Welcome to REPX v" + CheatGUI.version + " by DiegoTheWise & gir489\n\nFeatures:\nInformation Spoofing\nESP\nMisc Cheats\nSavable Config\nAnd more!";
+			string text2 = "\n\nChange Log:\nAdded: Level Tab.\nAdded: All Players option in Players Tab.\nAdded: Force Name in Players Tab.\nAdded: Force Message in Players Tab.\nAdded: Shake Screen in Players Tab.\nAdded: Fake Lag in Players Tab.\nAdded: Disable Player in Players Tab.\nAdded: Kick Player in Players Tab.\nAdded: Softlock Game in Trolling Tab.\nAnd much more!\n\nv1.1.1:\nUpdated for v0.3.2 of RE.P.O by gir489.";
+			GUILayout.Label(text + text2, GUI.skin.textArea, new GUILayoutOption[] { GUILayout.ExpandHeight(true) });
+		}
+
+		private void DrawESPTab()
+		{
+			bool flag = this._settingsData != null;
+			if (flag)
+			{
+				UI.Checkbox(ref this._settingsData.b_Esp, "Esp", "Toggle all ESP features on/off");
+				UI.Slider(ref this._settingsData.f_EspRange, 5f, 1000f, "Esp Range", "Set the maximum distance for ESP rendering.", false);
+				UI.Checkbox(ref this._settingsData.b_Tracer, "Esp Tracer", "Draw lines from player to ESP targets.");
+				UI.Checkbox(ref this._settingsData.b_ItemEsp, "Item Esp", "Highlight items in the world.");
+				bool b_ItemEsp = this._settingsData.b_ItemEsp;
+				if (b_ItemEsp)
+				{
+					UI.Checkbox(ref this._settingsData.b_ItemNameEsp, "Item Name Esp", "Show names above highlighted items.");
+				}
+				UI.Checkbox(ref this._settingsData.b_PlayerEsp, "Player Esp", "Highlight other players.");
+				bool b_PlayerEsp = this._settingsData.b_PlayerEsp;
+				if (b_PlayerEsp)
+				{
+					UI.Checkbox(ref this._settingsData.b_PlayerNameEsp, "Player Name Esp", "Show names above highlighted players.");
+				}
+				UI.Checkbox(ref this._settingsData.b_EnemyEsp, "Enemy Esp", "Highlight enemies.");
+				bool b_EnemyEsp = this._settingsData.b_EnemyEsp;
+				if (b_EnemyEsp)
+				{
+					UI.Checkbox(ref this._settingsData.b_EnemyNameEsp, "Enemy Name Esp", "Show names above highlighted enemies.");
+				}
+			}
+		}
+
+		private void DrawSelfTab()
+		{
+			bool flag = this._settingsData != null;
+			if (flag)
+			{
+				UI.Checkbox(ref this._settingsData.b_InfiniteStamina, "Infinite Stamina", "Gives the local player Infinite Stamina.");
+				UI.Checkbox(ref this._settingsData.b_GodMode, "God Mode", "Puts the local player in a invulnerable state.");
+				UI.Checkbox(ref this._settingsData.b_Invulnerable, "Invulnerable", "Makes the local player be ignored by Enemy AI and other interactions.");
+				UI.Checkbox(ref this._settingsData.b_Invisibility, "Invisibility", "Makes the player invisible to other players, only works in multiplayer!");
+				UI.Checkbox(ref this._settingsData.b_AntiKnockBack, "Anti-Knock Back", "Prevents the local player from being able to be knocked back by force.");
+				UI.Checkbox(ref this._settingsData.b_NoTumble, "No Tumble", "Prevents the local player from tumbling by unvoluntary action.");
+				UI.Checkbox(ref this._settingsData.b_IndestructibleObjects, "Indestructible Objects", "Makes objects not take damage by local actions.");
+				UI.Checkbox(ref this._settingsData.b_HearEveryone, "Hear Everyone", "Makes it where you can hear everyone no matter the range.");
+			}
+		}
+
+		private void DrawPlayersTab()
+		{
+			if (this._settingsData == null || GameDirector.instance == null)
+				return;
+
+			var players = GameDirector.instance.PlayerList;
+			if (players.Count <= 0)
+			{
+				GUILayout.Label("No players found.", new GUILayoutOption[] { GUILayout.ExpandWidth(false) });
+				return;
+			}
+
+			List<string> playerNames = new List<string> { "All Players" };
+			playerNames.AddRange(players.Select(pa => pa.GetPlayerName()));
+
+			UI.Dropdown(ref this._playerSel, "Player", playerNames.ToArray(), "");
+
+			bool isAllPlayers = this._playerSel == 0;
+			List<PlayerAvatar> selectedPlayers;
+			if (!isAllPlayers)
+			{
+				selectedPlayers = new List<PlayerAvatar>(1) { players.ElementAt(this._playerSel - 1) };
+			}
+			else
+			{
+				selectedPlayers = GameDirector.instance.PlayerList;
+			}
+
+			string playerLabel = isAllPlayers ? "All" : selectedPlayers[0].GetPlayerName();
+			GUILayout.Label("Player: " + playerLabel, new GUILayoutOption[] { GUILayout.ExpandWidth(false) });
+
+			if (!isAllPlayers)
+			{
+				string steamId = selectedPlayers[0].GetSteamId();
+				UI.TextBox(ref steamId, "Steam Id:", "", 200, 0);
+			}
+
+			if (!SemiFunc.RunIsLobbyMenu())
+			{
+				UI.Header("Trolling");
+				UI.Checkbox(ref this._shakeScreen, "Shake Screen", "Rapidly shakes the selected player screen.");
+				UI.Checkbox(ref this._deathLoop, "Death Loop", "Puts the current selected player in to a endless death loop.");
+				UI.Slider(ref this._lagInterval, 1f, 60f, "Lag Interval", "The interval that the fake leg uses to simulate.", false);
+				UI.Checkbox(ref this._fakeLag, "Fake Lag", "Simulates fake lag by constantly teleporting the selected player back to a previous position.");
+				UI.Slider(ref this._dhAmount, 0f, 1000f, "Damage/Heal Amount", "the Damage/Heal amount.", true);
+
+				UI.Button("Damage", "Damage the player.", () =>
+				{
+					foreach (PlayerAvatar playerAvatar in selectedPlayers)
+					{
+						if (!playerAvatar.IsDead())
+						{
+							playerAvatar.playerHealth.HurtOther((int)this._dhAmount, Vector3.zero, false, -1);
+						}
+					}
+				});
+
+				UI.Button("Heal", "Heal the player.", () =>
+				{
+					foreach (PlayerAvatar playerAvatar in selectedPlayers)
+					{
+						if (!playerAvatar.IsDead())
+						{
+							playerAvatar.playerHealth.HealOther((int)this._dhAmount, false);
+						}
+					}
+				});
+
+				this.DrawKillButton(selectedPlayers);
+
+				UI.Button("Revive", "Revive player to full hp.", () =>
+				{
+					foreach (PlayerAvatar playerAvatar in selectedPlayers)
+					{
+						if (playerAvatar.IsDead())
+						{
+							playerAvatar.Revive(false);
+							playerAvatar.playerHealth.HealOther(100000, false);
+						}
+					}
+				});
+
+				UI.Button("Ragdall", "Puts the current selected player in the Ragdoll state.", () =>
+				{
+					foreach (PlayerAvatar playerAvatar in selectedPlayers)
+					{
+						if (!(playerAvatar.IsLocalPlayer() && this._settingsData.b_NoTumble))
+						{
+							playerAvatar.tumble.TumbleSet(true, false);
+						}
+					}
+				});
+
+				UI.Header("Destructive");
+				UI.Button("Disabled Player", "Disable the selected players Player Avatar, which is a extremely buggy State when alive.", () =>
+				{
+					foreach (PlayerAvatar playerAvatar in selectedPlayers)
+					{
+						playerAvatar.SetDisabledExploit();
+					}
+				});
+
+				this.DrawSoftlockButton(selectedPlayers);
+
+				if (!isAllPlayers)
+				{
+					UI.Button("Kick Player", "Removes the selected player from the game by disabling their Player Avatar, Soft Locking them, and teleporting them outside the map.", () =>
+					{
+						foreach (PlayerAvatar playerAvatar in selectedPlayers)
+						{
+							if (!playerAvatar.IsLocalPlayer())
+							{
+								playerAvatar.OutroExploit();
+								playerAvatar.SetDisabledExploit();
+								playerAvatar.TeleportExploit(new Vector3(0f, -100000f, 0f), null, 0);
+								playerAvatar.SetNameExploit(null, "");
+							}
+						}
+					});
+				}
+			}
+			else
+			{
+				UI.Header("Trolling");
+				UI.Checkbox(ref this._shakeScreen, "Shake Screen", "Rapidly shakes the selected player screen.");
+				this.DrawKillButton(selectedPlayers);
+				UI.Header("Destructive");
+				this.DrawSoftlockButton(selectedPlayers);
+			}
+
+			if (SemiFunc.IsMultiplayer())
+			{
+				UI.Header("Multiplayer");
+				if (!isAllPlayers)
+				{
+					UI.Button("Teleport " + playerLabel + " To Self", "Teleports the selected player to the local player.", () =>
+					{
+						PlayerAvatar playerAvatar = selectedPlayers[0];
+						if (!playerAvatar.IsLocalPlayer())
+						{
+							playerAvatar.TeleportExploit(PlayerAvatar.instance.transform.position, null, 0);
+						}
+					});
+
+					UI.Button("Teleport All Players To " + playerLabel, "Teleports all players to the selected player.", () =>
+					{
+						PlayerAvatar targetPlayer = selectedPlayers[0];
+						foreach (PlayerAvatar playerAvatar in players)
+						{
+							if (playerAvatar != targetPlayer)
+							{
+								playerAvatar.TeleportExploit(targetPlayer.transform.position, null, 0);
+							}
+						}
+					});
+				}
+
+				UI.Divider();
+				UI.TextBox(ref this._forcePlayerName, "New Player Name", "The new player named to set.", 200, 0);
+				UI.Button("Force Player Name", "Forcibly changes the selected player's name.", () =>
+				{
+					foreach (PlayerAvatar playerAvatar in selectedPlayers)
+					{
+						playerAvatar.SetNameExploit(this._forcePlayerName, null);
+					}
+				});
+
+				UI.Divider();
+				UI.Checkbox(ref this._hideMessage, "Hide message from selected player", "Prevents the selected player from seeing the forced message.");
+				UI.TextBox(ref this._chatMessage, "Chat Message", "Contents of Force Chat Message.", 300, 100);
+				UI.Button("Force Chat Message", "Forces the selected player to send a chat message.", () =>
+				{
+					foreach (PlayerAvatar playerAvatar in selectedPlayers)
+					{
+						bool isCrouching = playerAvatar.GetField<bool>("isCrouching");
+						bool isDisabled = playerAvatar.GetField<bool>("isDisabled");
+						if (isDisabled)
+						{
+							isCrouching = true;
+						}
+
+						if (!this._hideMessage)
+						{
+							playerAvatar.photonView.RPC("ChatMessageSendRPC", RpcTarget.All, new object[]
+							{
+								this._chatMessage,
+								isCrouching
+							});
+						}
+						else
+						{
+							foreach (Player player in PhotonNetwork.PlayerList)
+							{
+								if (player != playerAvatar.photonView.Owner)
+								{
+									playerAvatar.photonView.RPC("ChatMessageSendRPC", player, new object[]
+									{
+										this._chatMessage,
+										isCrouching
+									});
+								}
+							}
+						}
+					}
+				});
+
+				UI.Checkbox(ref this._spamChatMessage, "Spam Chat Message", "Makes the selected player spam a chat message.");
+			}
+
+			if (!isAllPlayers)
+			{
+				UI.Header("Upgrades");
+				StatsManager stats = PunManager.instance.GetField<StatsManager>("statsManager");
+
+				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeHealth, "Health Upgrade", "Upgrade Health", (str, num) =>
+				{
+					stats.playerUpgradeHealth[str] += num;
+					PunManager.instance.InvokeMethod("UpdateHealthRightAway", new object[] { str });
+					PunManager.instance.GetPhotonView("photonView").RPC("UpgradePlayerHealthRPC", RpcTarget.MasterClient, new object[] { str, stats.playerUpgradeHealth });
+				});
+
+				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeStrength, "Grab Strength Upgrade", "Upgrade Grab Strength", (str, num) =>
+				{
+					stats.playerUpgradeStrength[str] += num;
+					PunManager.instance.InvokeMethod("UpdateGrabStrengthRightAway", new object[] { str });
+					PunManager.instance.GetPhotonView("photonView").RPC("UpgradePlayerGrabStrengthRPC", RpcTarget.MasterClient, new object[] { str, stats.playerUpgradeStrength });
+				});
+
+				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeStamina, "Sprint Energy", "Upgrade Energy", (str, num) =>
+				{
+					stats.playerUpgradeStamina[str] += num;
+					PunManager.instance.InvokeMethod("UpdateEnergyRightAway", new object[] { str });
+					PunManager.instance.GetPhotonView("photonView").RPC("UpgradePlayerEnergyRPC", RpcTarget.MasterClient, new object[] { str, stats.playerUpgradeStamina });
+				});
+
+				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeSpeed, "Sprint Speed Upgrade", "Upgrade Sprint Speed", (str, num) =>
+				{
+					stats.playerUpgradeSpeed[str] += num;
+					PunManager.instance.InvokeMethod("UpdateSprintSpeedRightAway", new object[] { str });
+					PunManager.instance.GetPhotonView("photonView").RPC("UpgradePlayerSprintSpeedRPC", RpcTarget.MasterClient, new object[] { str, stats.playerUpgradeSpeed });
+				});
+
+				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeExtraJump, "Extra Jump Upgrade", "Upgrade Extra Jump", (str, num) =>
+				{
+					stats.playerUpgradeExtraJump[str] += num;
+					PunManager.instance.InvokeMethod("UpdateExtraJumpRightAway", new object[] { str });
+					PunManager.instance.GetPhotonView("photonView").RPC("UpgradePlayerExtraJumpRPC", RpcTarget.MasterClient, new object[] { str, stats.playerUpgradeExtraJump });
+				});
+
+				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeRange, "Grab Range Upgrade", "Upgrade Grab Range", (str, num) =>
+				{
+					stats.playerUpgradeRange[str] += num;
+					PunManager.instance.InvokeMethod("UpdateGrabRangeRightAway", new object[] { str });
+					PunManager.instance.GetPhotonView("photonView").RPC("UpgradePlayerGrabRangeRPC", RpcTarget.MasterClient, new object[] { str, stats.playerUpgradeRange });
+				});
+			}
+		}
+
+		private void DrawKillButton(List<PlayerAvatar> selectedPlayers)
+		{
+			UI.Button("Kill", "Kills the selected player.", () =>
+			{
+				foreach (PlayerAvatar playerAvatar in selectedPlayers)
+				{
+					if (!playerAvatar.IsDead())
+					{
+						playerAvatar.PlayerDeath(-1);
+					}
+				}
+			});
+		}
+
+		private void DrawSoftlockButton(List<PlayerAvatar> selectedPlayers)
+		{
+			UI.Button("Softlock Player", "Soft locks the selected player by forcing outro state.", () =>
+			{
+				foreach (PlayerAvatar playerAvatar in selectedPlayers)
+				{
+					playerAvatar.OutroExploit();
+				}
+			});
+		}
+
+		private void DrawUpgradeButton(List<PlayerAvatar> selectedPlayers, Dictionary<string, int> upgradeDict, string label, string tooltip, Action<string, int> upgradeAction)
+		{
+			PlayerAvatar player = selectedPlayers[0];
+			string steamId = player.GetSteamId();
+			int currentValue = 0;
+			if (upgradeDict.ContainsKey(steamId))
+			{
+				currentValue = upgradeDict[steamId];
+			}
+
+			GUILayout.BeginHorizontal(Array.Empty<GUILayoutOption>());
+			GUILayout.Label(string.Format("{0}: {1}", label, currentValue), new GUILayoutOption[] { GUILayout.Width(200f) });
+
+			if (GUILayout.Button("+1", new GUILayoutOption[] { GUILayout.Width(50f) }))
+			{
+				upgradeAction(steamId, 1);
+			}
+			if (GUILayout.Button("+5", new GUILayoutOption[] { GUILayout.Width(50f) }))
+			{
+				upgradeAction(steamId, 5);
+			}
+			if (GUILayout.Button("+10", new GUILayoutOption[] { GUILayout.Width(50f) }))
+			{
+				upgradeAction(steamId, 10);
+			}
+			if (GUILayout.Button("Reset", new GUILayoutOption[] { GUILayout.Width(60f) }))
+			{
+				upgradeAction(steamId, -currentValue);
+			}
+
+			GUILayout.EndHorizontal();
+		}
+
+		private void DrawLevelTab()
+		{
+			bool flag = this._settingsData != null;
+			if (flag)
+			{
+				UI.Button("Force Arena Game", "Forces to load the Arena Game.", () =>
+				{
+					foreach (PlayerAvatar playerAvatar in GameDirector.instance.PlayerList)
+					{
+						if (!playerAvatar.IsDead())
+						{
+							playerAvatar.PlayerDeath(-1);
+						}
+					}
+				});
+
+				bool flag2 = SemiFunc.RunIsLevel();
+				if (flag2)
+				{
+					List<GameObject> extractionPoints = RoundDirector.instance.GetField<List<GameObject>>("extractionPointList");
+					bool flag3 = extractionPoints.Count > 0;
+					if (flag3)
+					{
+						string[] pointNames = extractionPoints.Select((point, index) => string.Format("Extraction Point {0}", index + 1)).ToArray();
+						UI.Header("Extraction");
+						UI.Dropdown(ref this._extractionIndex, "Extraction Points", pointNames, "");
+
+						GameObject selectedObj = extractionPoints.ElementAt(this._extractionIndex);
+						ExtractionPoint selectedExtraction = (selectedObj != null) ? selectedObj.GetComponent<ExtractionPoint>() : null;
+
+						if (selectedExtraction != null)
+						{
+							ExtractionPoint.State currentState = selectedExtraction.GetField<ExtractionPoint.State>("currentState");
+
+							if (currentState != (ExtractionPoint.State)7)
+							{
+								if (currentState != (ExtractionPoint.State)1)
+								{
+									GUILayout.Label(string.Format("Current Goal: ({0}/{1})", selectedExtraction.GetField<int>("haulCurrent"), selectedExtraction.haulGoal), new GUILayoutOption[] { GUILayout.ExpandWidth(false) });
+									UI.Slider(ref this._newExtractionGoal, 0, 100000, "New Goal", "Amount of cash needed for new extraction goal.");
+									UI.Button("Set Extraction Goal", "Sets a new cash goal for the current selected extraction.", () =>
+									{
+										if (SemiFunc.IsMultiplayer())
+										{
+											selectedExtraction.GetPhotonView("photonView").RPC("HaulGoalSetRPC", RpcTarget.All, new object[] { this._newExtractionGoal });
+										}
+										else
+										{
+											selectedExtraction.HaulGoalSetRPC(this._newExtractionGoal);
+										}
+									});
+
+									UI.Slider(ref this._surplusExtractionGoal, 0, 100000, "Surplus Amount", "Amount of cash set when activating extraction..");
+									UI.Button("Surplus Extraction", "Activates extraction to calculate input amount of cash.", () =>
+									{
+										if (SemiFunc.IsMultiplayer())
+										{
+											selectedExtraction.GetField<PhotonView>("photonView").RPC("ExtractionPointSurplusRPC", RpcTarget.All, new object[] { this._surplusExtractionGoal });
+										}
+										else
+										{
+											selectedExtraction.ExtractionPointSurplusRPC(this._surplusExtractionGoal);
+										}
+									});
+								}
+								else
+								{
+									UI.Button("Activate Extraction", "Activates the current selected extraction.", () =>
+									{
+										if (SemiFunc.IsMultiplayer())
+										{
+											selectedExtraction.GetField<PhotonView>("photonView").RPC("StateSetRPC", RpcTarget.All, new object[] { 2 });
+										}
+										else
+										{
+											selectedExtraction.StateSetRPC(ExtractionPoint.State.Active);
+										}
+									});
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		private void DrawMiscTab()
+		{
+			bool flag = this._settingsData != null;
+			if (flag)
+			{
+				bool flag2 = !SemiFunc.IsMainMenu();
+				if (flag2)
+				{
+					UI.Button("Force Exit Game", "Forces the local player to exit the current game.", () =>
+					{
+						NetworkManager.instance.LeavePhotonRoom();
+						PhotonNetwork.NetworkingClient.State = ClientState.Leaving;
+					});
+				}
+				UI.Checkbox(ref this._settingsData.b_Spoofing, "Spoofing", "Enable identity spoofing features.");
+				bool b_Spoofing = this._settingsData.b_Spoofing;
+				if (b_Spoofing)
+				{
+					UI.TextBox(ref this._settingsData.s_SpoofedName, "Spoofed Name", "Enter the name you want to appear as.", 200, 0);
+					UI.TextBox(ref this._settingsData.s_SpoofedSteamId, "Spoofed Steam Id", "Enter the Steam ID you want to appear as.", 200, 0);
+				}
+				UI.Checkbox(ref this._settingsData.b_FakePing, "Fake Ping", "Makes it where you have a fixed ping amount displayed.");
+				bool b_FakePing = this._settingsData.b_FakePing;
+				if (b_FakePing)
+				{
+					UI.Slider(ref this._settingsData.i_FakePingNum, 0, 100000, "Fake Ping Amount", "The fixed ping amount to use.");
+				}
+			}
+		}
+
+		private void DrawTrollingTab()
+		{
+			bool flag = this._settingsData != null;
+			if (flag)
+			{
+				bool flag2 = !GameDirector.instance.GetField<bool>("outroStart");
+				if (flag2)
+				{
+					UI.Button("Softlock Game", "Soft locks the game by forcing outro state.", () =>
+					{
+						foreach (PlayerAvatar playerAvatar in GameDirector.instance.PlayerList)
+						{
+							playerAvatar.OutroExploit();
+						}
+					});
+				}
+				bool flag3 = !SemiFunc.RunIsLobbyMenu();
+				if (flag3)
+				{
+					UI.Button("Teleport All To Void", "Teleports all players to the Void.", () =>
+					{
+						foreach (PlayerAvatar playerAvatar in GameDirector.instance.PlayerList)
+						{
+							playerAvatar.TeleportExploit(new Vector3(0f, -1000f, 0f), null, 0);
+						}
+					});
+
+					UI.Button("Teleport All To Spawn", "Teleports all players to the Spawn Room.", () =>
+					{
+						foreach (PlayerAvatar playerAvatar in GameDirector.instance.PlayerList)
+						{
+							// Get the first GameObject from StartRooms list
+							GameObject firstRoom = LevelGenerator.Instance.Level.StartRooms[0].Prefab;
+							Vector3 position = firstRoom.transform.position;
+							playerAvatar.TeleportExploit(position, null, 0);
+						}
+					});
+
+					UI.Button("Despawn All Valuables", "Despawns all valuables.", () =>
+					{
+						foreach (PhysGrabObject physGrabObject in MonoHelper.CatchedPhysGrabObjects)
+						{
+							if (physGrabObject != null && physGrabObject.GetField<bool>("isValuable"))
+							{
+								physGrabObject.Despawn();
+							}
+						}
+					});
+
+					UI.Button("Despawn All Objects", "Despawns all objects.", () =>
+					{
+						foreach (PhysGrabObject physGrabObject in MonoHelper.CatchedPhysGrabObjects)
+						{
+							if (physGrabObject != null)
+							{
+								physGrabObject.Despawn();
+							}
+						}
+					});
+				}
+			}
+		}
+
+		private void DrawTriggerCheatTab()
+		{
+			bool flag = this._settingsData != null;
+			if (flag)
+			{
+				GUIStyle guistyle = new GUIStyle(GUI.skin.box)
+				{
+					wordWrap = true,
+					alignment = TextAnchor.UpperLeft,
+					padding = new RectOffset(8, 8, 8, 8),
+					margin = new RectOffset(0, 0, 5, 10)
+				};
+				string text = "Custom actions that are done when the middle Mouse button is clicked while facing a valid object.";
+				GUILayout.Box(text, guistyle, new GUILayoutOption[] { GUILayout.ExpandWidth(true) });
+				UI.Dropdown(ref this._settingsData.i_PlayerTriggerAction, "On Player Trigger", this._playerTriggerActions, "Action taken when player is clicked on by trigger cheat");
+				UI.Dropdown(ref this._settingsData.i_ObjectTriggerAction, "On Object Trigger", this._objectTriggerActions, "Action taken when object is clicked on by trigger cheat");
+			}
+		}
+
+		private void DrawSettingsTab()
+		{
+			bool flag = this._settingsData != null;
+			if (flag)
+			{
+				if (_cachedUnloadAction == null)
+				{
+					_cachedUnloadAction = new Action(Loader.Unload);
+				}
+				UI.Button("Unload Menu", "Umloads the menu from the game.", _cachedUnloadAction);
+				UI.Button("Save Settings", "Saves all settings", new Action(Settings.Instance.SaveSettings));
+				UI.Checkbox(ref this._settingsData.b_AutoSave, "Auto Save", "Automatically saves config when a value changes.");
+				UI.Checkbox(ref this._settingsData.b_Tooltips, "Tooltips", "");
+				UI.Checkbox(ref this._settingsData.b_IgnoreChat, "Ignore Chat", "Ignore chat inputs while menu is open.");
+				UI.Checkbox(ref this._settingsData.b_IgnoreMouseMovement, "Ignore Mosue Movement", "Ignore mouse movement inputs while menu is open.");
+				UI.Checkbox(ref this._settingsData.b_IgnoreMovement, "Ignore Movement", "Ignore movement inputs while menu is open.");
+				UI.ColorPicker(ref this._settingsData.c_Theme, "Menu Theme");
+				UI.ColorPicker(ref this._settingsData.c_PlayerEspColor, "Player Esp Color");
+				UI.ColorPicker(ref this._settingsData.c_EnemyEspColor, "Enemy Esp Color");
+				UI.ColorPicker(ref this._settingsData.c_ItemEspColor, "Item Esp Color");
+			}
+		}
+
+		internal static float Round(float value, int digits)
+		{
+			float num = Mathf.Pow(10f, (float)digits);
+			return Mathf.Round(value * num) / num;
+		}
+
+		internal static readonly string GUID = "com.repx.loader";
+		internal static readonly string version = "1.1.1";
+		internal static Harmony harmony;
+		private GUIStyle _style;
+		private SettingsData _settingsData;
+		private Vector2 _scrollPos;
+		private bool _initialized;
+		private static bool _styleInitialized;
+		private static GUIStyle _defaultStyle;
+		private float _msgTime = 0f;
+		private float _fakeLagTime = 0f;
+		private float _lagInterval = 4f;
+		private Dictionary<PlayerAvatar, Vector3> _lagLastPos = new Dictionary<PlayerAvatar, Vector3>();
+		private Vector2 _menuScrollPos;
+		private int _playerSel = 0;
+		private float _dhAmount = 25f;
+		private bool _deathLoop;
+		private bool _shakeScreen;
+		private bool _fakeLag;
+		private string _forcePlayerName = string.Empty;
+		private bool _hideMessage;
+		private string _chatMessage = string.Empty;
+		private bool _spamChatMessage;
+		private int _newExtractionGoal;
+		private int _surplusExtractionGoal;
+		private int _extractionIndex;
+		private string steamIdToJoin = "";
+		private readonly string[] _playerTriggerActions = new string[] { "None", "Kill", "Ragdoll" };
+		private readonly string[] _objectTriggerActions = new string[] { "None", "Despawn" };
+		private static Action _cachedUnloadAction;
+	}
+}
