@@ -959,7 +959,7 @@ namespace REPX
 				{
 					_cachedUnloadAction = new Action(Loader.Unload);
 				}
-				UI.Button("Unload Menu", "Umloads the menu from the game.", _cachedUnloadAction);
+				UI.Button("Unload Menu", "Unloads the menu from the game.", _cachedUnloadAction);
 				UI.Button("Save Settings", "Saves all settings", new Action(Settings.Instance.SaveSettings));
 				UI.Checkbox(ref this._settingsData.b_AutoSave, "Auto Save", "Automatically saves config when a value changes.");
 				UI.Checkbox(ref this._settingsData.b_Tooltips, "Tooltips", "");
