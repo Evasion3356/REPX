@@ -60,8 +60,7 @@ namespace REPX
 
 		private void OnGUI()
 		{
-			bool isScreenshotting = Input.GetKey(KeyCode.F12) /*|| Input.GetKey(KeyCode.Print)*/;
-			if (isScreenshotting)
+			if (Input.GetKey(KeyCode.F12) || Input.GetKey(KeyCode.RightShift)) //Screenshot check.
 			{
 				return;
 			}
@@ -97,19 +96,6 @@ namespace REPX
 		{
 			this.MenuUpdate();
 			this.SelectedPlayerUpdate();
-			bool flag = SemiFunc.IsMainMenu();
-			if (flag)
-			{
-				this._shakeScreen = false;
-				this._deathLoop = false;
-				this._spamChatMessage = false;
-				this._fakeLag = false;
-				bool flag2 = this._lagLastPos.Count > 0;
-				if (flag2)
-				{
-					this._lagLastPos.Clear();
-				}
-			}
 			try
 			{
 				TriggerCheat.GetMonoTrigger();
@@ -163,72 +149,6 @@ namespace REPX
 					list = GameDirector.instance.PlayerList;
 				}
 				List<PlayerAvatar> list2 = list;
-				bool fakeLag = this._fakeLag;
-				if (fakeLag)
-				{
-					this._fakeLagTime += deltaTime;
-					foreach (PlayerAvatar playerAvatar in list2)
-					{
-						bool flag3 = this._fakeLagTime > this._lagInterval * 0.75f;
-						if (flag3)
-						{
-							bool flag4 = !this._lagLastPos.ContainsKey(playerAvatar);
-							if (flag4)
-							{
-								this._lagLastPos[playerAvatar] = playerAvatar.transform.position;
-							}
-						}
-						bool flag5 = this._fakeLagTime > this._lagInterval;
-						if (flag5)
-						{
-							Vector3 vector;
-							bool flag6 = this._lagLastPos.TryGetValue(playerAvatar, out vector);
-							if (flag6)
-							{
-								playerAvatar.TeleportExploit(vector, null, 0);
-							}
-						}
-					}
-					bool flag7 = this._fakeLagTime > this._lagInterval;
-					if (flag7)
-					{
-						this._fakeLagTime = 0f;
-						this._lagLastPos.Clear();
-					}
-				}
-				else
-				{
-					this._fakeLagTime = 0f;
-					bool flag8 = this._lagLastPos.Count > 0;
-					if (flag8)
-					{
-						this._lagLastPos.Clear();
-					}
-				}
-				bool shakeScreen = this._shakeScreen;
-				if (shakeScreen)
-				{
-					foreach (PlayerAvatar playerAvatar2 in list2)
-					{
-						RoundDirector.instance.GetPhotonView("photonView").RPC("ExtractionCompletedAllRPC", playerAvatar2.photonView.Owner, Array.Empty<object>());
-					}
-				}
-				bool deathLoop = this._deathLoop;
-				if (deathLoop)
-				{
-					foreach (PlayerAvatar playerAvatar3 in list2)
-					{
-						bool flag9 = !playerAvatar3.IsDead();
-						if (flag9)
-						{
-							playerAvatar3.PlayerDeath(-1);
-						}
-						else
-						{
-							playerAvatar3.Revive(false);
-						}
-					}
-				}
 				bool flag10 = this._spamChatMessage && this._msgTime > 0.25f;
 				if (flag10)
 				{
@@ -408,7 +328,7 @@ namespace REPX
 				bool b_ItemEsp = this._settingsData.b_ItemEsp;
 				if (b_ItemEsp)
 				{
-					UI.Checkbox(ref this._settingsData.b_ItemNameEsp, "Item Name Esp", "Show names above highlighted items.");
+					UI.Checkbox(ref this._settingsData.b_ItemValueEsp, "Item Value Esp", "Show how much the item is worth above the item.");
 				}
 				UI.Checkbox(ref this._settingsData.b_PlayerEsp, "Player Esp", "Highlight other players.");
 				bool b_PlayerEsp = this._settingsData.b_PlayerEsp;
@@ -480,24 +400,7 @@ namespace REPX
 
 			if (!SemiFunc.RunIsLobbyMenu())
 			{
-				UI.Header("Trolling");
-				UI.Checkbox(ref this._shakeScreen, "Shake Screen", "Rapidly shakes the selected player screen.");
-				UI.Checkbox(ref this._deathLoop, "Death Loop", "Puts the current selected player in to a endless death loop.");
-				UI.Slider(ref this._lagInterval, 1f, 60f, "Lag Interval", "The interval that the fake leg uses to simulate.", false);
-				UI.Checkbox(ref this._fakeLag, "Fake Lag", "Simulates fake lag by constantly teleporting the selected player back to a previous position.");
-				UI.Slider(ref this._dhAmount, 0f, 1000f, "Damage/Heal Amount", "the Damage/Heal amount.", true);
-
-				UI.Button("Damage", "Damage the player.", () =>
-				{
-					foreach (PlayerAvatar playerAvatar in selectedPlayers)
-					{
-						if (!playerAvatar.IsDead())
-						{
-							playerAvatar.playerHealth.HurtOther((int)this._dhAmount, Vector3.zero, false, -1);
-						}
-					}
-				});
-
+				UI.Slider(ref this._dhAmount, 0f, 200f, "Heal Amount", "the Heal amount.", true);
 				UI.Button("Heal", "Heal the player.", () =>
 				{
 					foreach (PlayerAvatar playerAvatar in selectedPlayers)
@@ -508,59 +411,6 @@ namespace REPX
 						}
 					}
 				});
-
-				this.DrawKillButton(selectedPlayers);
-
-				UI.Button("Revive", "Revive player to full hp.", () =>
-				{
-					foreach (PlayerAvatar playerAvatar in selectedPlayers)
-					{
-						if (playerAvatar.IsDead())
-						{
-							playerAvatar.Revive(false);
-							playerAvatar.playerHealth.HealOther(100000, false);
-						}
-					}
-				});
-
-				UI.Button("Ragdall", "Puts the current selected player in the Ragdoll state.", () =>
-				{
-					foreach (PlayerAvatar playerAvatar in selectedPlayers)
-					{
-						if (!(playerAvatar.IsLocalPlayer() && this._settingsData.b_NoTumble))
-						{
-							playerAvatar.tumble.TumbleSet(true, false);
-						}
-					}
-				});
-
-				UI.Header("Destructive");
-				UI.Button("Disabled Player", "Disable the selected players Player Avatar, which is a extremely buggy State when alive.", () =>
-				{
-					foreach (PlayerAvatar playerAvatar in selectedPlayers)
-					{
-						playerAvatar.SetDisabledExploit();
-					}
-				});
-
-				this.DrawSoftlockButton(selectedPlayers);
-
-				if (!isAllPlayers)
-				{
-					UI.Button("Kick Player", "Removes the selected player from the game by disabling their Player Avatar, Soft Locking them, and teleporting them outside the map.", () =>
-					{
-						foreach (PlayerAvatar playerAvatar in selectedPlayers)
-						{
-							if (!playerAvatar.IsLocalPlayer())
-							{
-								playerAvatar.OutroExploit();
-								playerAvatar.SetDisabledExploit();
-								playerAvatar.TeleportExploit(new Vector3(0f, -100000f, 0f), null, 0);
-								playerAvatar.SetNameExploit(null, "");
-							}
-						}
-					});
-				}
 			}
 			else
 			{
@@ -658,43 +508,37 @@ namespace REPX
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeHealth, "Health Upgrade", "Upgrade Health", (str, num) =>
 				{
 					stats.playerUpgradeHealth[str] += num;
-					PunManager.instance.InvokeMethod("UpdateHealthRightAway", new object[] { str });
-					PunManager.instance.GetPhotonView("photonView").RPC("UpgradePlayerHealthRPC", RpcTarget.MasterClient, new object[] { str, stats.playerUpgradeHealth });
+					PunManager.instance.InvokeMethod("UpdateHealthRightAway", new object[] { str, num });
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeStrength, "Grab Strength Upgrade", "Upgrade Grab Strength", (str, num) =>
 				{
 					stats.playerUpgradeStrength[str] += num;
-					PunManager.instance.InvokeMethod("UpdateGrabStrengthRightAway", new object[] { str });
-					PunManager.instance.GetPhotonView("photonView").RPC("UpgradePlayerGrabStrengthRPC", RpcTarget.MasterClient, new object[] { str, stats.playerUpgradeStrength });
+					PunManager.instance.InvokeMethod("UpdateGrabStrengthRightAway", new object[] { str, num });
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeStamina, "Sprint Energy", "Upgrade Energy", (str, num) =>
 				{
 					stats.playerUpgradeStamina[str] += num;
-					PunManager.instance.InvokeMethod("UpdateEnergyRightAway", new object[] { str });
-					PunManager.instance.GetPhotonView("photonView").RPC("UpgradePlayerEnergyRPC", RpcTarget.MasterClient, new object[] { str, stats.playerUpgradeStamina });
+					PunManager.instance.InvokeMethod("UpdateEnergyRightAway", new object[] { str, num });
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeSpeed, "Sprint Speed Upgrade", "Upgrade Sprint Speed", (str, num) =>
 				{
 					stats.playerUpgradeSpeed[str] += num;
-					PunManager.instance.InvokeMethod("UpdateSprintSpeedRightAway", new object[] { str });
-					PunManager.instance.GetPhotonView("photonView").RPC("UpgradePlayerSprintSpeedRPC", RpcTarget.MasterClient, new object[] { str, stats.playerUpgradeSpeed });
+					PunManager.instance.InvokeMethod("UpdateSprintSpeedRightAway", new object[] { str, num });
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeExtraJump, "Extra Jump Upgrade", "Upgrade Extra Jump", (str, num) =>
 				{
 					stats.playerUpgradeExtraJump[str] += num;
-					PunManager.instance.InvokeMethod("UpdateExtraJumpRightAway", new object[] { str });
-					PunManager.instance.GetPhotonView("photonView").RPC("UpgradePlayerExtraJumpRPC", RpcTarget.MasterClient, new object[] { str, stats.playerUpgradeExtraJump });
+					PunManager.instance.InvokeMethod("UpdateExtraJumpRightAway", new object[] { str, num });
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeRange, "Grab Range Upgrade", "Upgrade Grab Range", (str, num) =>
 				{
 					stats.playerUpgradeRange[str] += num;
-					PunManager.instance.InvokeMethod("UpdateGrabRangeRightAway", new object[] { str });
-					PunManager.instance.GetPhotonView("photonView").RPC("UpgradePlayerGrabRangeRPC", RpcTarget.MasterClient, new object[] { str, stats.playerUpgradeRange });
+					PunManager.instance.InvokeMethod("UpdateGrabRangeRightAway", new object[] { str, num });
 				});
 			}
 		}
@@ -791,19 +635,15 @@ namespace REPX
 						{
 							ExtractionPoint.State currentState = selectedExtraction.GetField<ExtractionPoint.State>("currentState");
 
-							if (currentState != (ExtractionPoint.State)7)
+							if (currentState != ExtractionPoint.State.Complete)
 							{
-								if (currentState != (ExtractionPoint.State)1)
+								if (currentState != ExtractionPoint.State.Idle)
 								{
 									GUILayout.Label(string.Format("Current Goal: ({0}/{1})", selectedExtraction.GetField<int>("haulCurrent"), selectedExtraction.haulGoal), new GUILayoutOption[] { GUILayout.ExpandWidth(false) });
 									UI.Slider(ref this._newExtractionGoal, 0, 100000, "New Goal", "Amount of cash needed for new extraction goal.");
 									UI.Button("Set Extraction Goal", "Sets a new cash goal for the current selected extraction.", () =>
 									{
-										if (SemiFunc.IsMultiplayer())
-										{
-											selectedExtraction.GetPhotonView("photonView").RPC("HaulGoalSetRPC", RpcTarget.All, new object[] { this._newExtractionGoal });
-										}
-										else
+										if (!SemiFunc.IsMultiplayer())
 										{
 											selectedExtraction.HaulGoalSetRPC(this._newExtractionGoal);
 										}
@@ -812,27 +652,9 @@ namespace REPX
 									UI.Slider(ref this._surplusExtractionGoal, 0, 100000, "Surplus Amount", "Amount of cash set when activating extraction..");
 									UI.Button("Surplus Extraction", "Activates extraction to calculate input amount of cash.", () =>
 									{
-										if (SemiFunc.IsMultiplayer())
-										{
-											selectedExtraction.GetField<PhotonView>("photonView").RPC("ExtractionPointSurplusRPC", RpcTarget.All, new object[] { this._surplusExtractionGoal });
-										}
-										else
+										if (!SemiFunc.IsMultiplayer())
 										{
 											selectedExtraction.ExtractionPointSurplusRPC(this._surplusExtractionGoal);
-										}
-									});
-								}
-								else
-								{
-									UI.Button("Activate Extraction", "Activates the current selected extraction.", () =>
-									{
-										if (SemiFunc.IsMultiplayer())
-										{
-											selectedExtraction.GetField<PhotonView>("photonView").RPC("StateSetRPC", RpcTarget.All, new object[] { 2 });
-										}
-										else
-										{
-											selectedExtraction.StateSetRPC(ExtractionPoint.State.Active);
 										}
 									});
 								}
@@ -974,7 +796,9 @@ namespace REPX
 				UI.ColorPicker(ref this._settingsData.c_Theme, "Menu Theme");
 				UI.ColorPicker(ref this._settingsData.c_PlayerEspColor, "Player Esp Color");
 				UI.ColorPicker(ref this._settingsData.c_EnemyEspColor, "Enemy Esp Color");
-				UI.ColorPicker(ref this._settingsData.c_ItemEspColor, "Item Esp Color");
+				UI.ColorPicker(ref this._settingsData.c_ItemEspColorLow, "Item Low Value Esp Color");
+				UI.ColorPicker(ref this._settingsData.c_ItemEspColorMedium, "Item Medium Value Esp Color");
+				UI.ColorPicker(ref this._settingsData.c_ItemEspColorHigh, "Item High Value Esp Color");
 				UI.ColorPicker(ref this._settingsData.c_CartEspColor, "Cart Esp Color");
 			}
 		}
@@ -990,20 +814,13 @@ namespace REPX
 		internal static Harmony harmony;
 		private GUIStyle _style;
 		private SettingsData _settingsData;
-		private Vector2 _scrollPos;
 		private bool _initialized;
-		private static bool _styleInitialized;
-		private static GUIStyle _defaultStyle;
 		private float _msgTime = 0f;
-		private float _fakeLagTime = 0f;
-		private float _lagInterval = 4f;
 		private Dictionary<PlayerAvatar, Vector3> _lagLastPos = new Dictionary<PlayerAvatar, Vector3>();
 		private Vector2 _menuScrollPos;
 		private int _playerSel = 0;
 		private float _dhAmount = 25f;
-		private bool _deathLoop;
 		private bool _shakeScreen;
-		private bool _fakeLag;
 		private string _forcePlayerName = string.Empty;
 		private bool _hideMessage;
 		private string _chatMessage = string.Empty;
@@ -1011,7 +828,6 @@ namespace REPX
 		private int _newExtractionGoal;
 		private int _surplusExtractionGoal;
 		private int _extractionIndex;
-		private string steamIdToJoin = "";
 		private readonly string[] _playerTriggerActions = new string[] { "None", "Kill", "Ragdoll" };
 		private readonly string[] _objectTriggerActions = new string[] { "None", "Despawn" };
 		private static Action _cachedUnloadAction;

@@ -1,10 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Runtime.CompilerServices;
+﻿using Photon.Realtime;
 using REPX.Data;
 using REPX.Extensions;
 using REPX.Helpers;
+using System;
+using System.Collections.Generic;
+using System.Numerics;
+using System.Runtime.CompilerServices;
+using Unity.VisualScripting;
 using UnityEngine;
+using static EnemySpinny;
 
 namespace REPX.Cheats
 {
@@ -12,51 +16,76 @@ namespace REPX.Cheats
 	{
 		internal static void RenderEsp()
 		{
-			bool flag = !Settings.Instance.SettingsData.b_Esp;
-			if (!flag)
+			if (!Settings.Instance.SettingsData.b_Esp) return;
+			if (Camera.main == null) return;
+
+			try
 			{
-				bool flag2 = Camera.main == null;
-				if (!flag2)
-				{
-					Camera main = Camera.main;
-					try
-					{
-						EspCheat.RenderPlayers(main);
-						EspCheat.RenderEnemies(main);
-						EspCheat.RenderItems(main);
-						EspCheat.RenderObjects(main);
-					}
-					catch (Exception ex)
-					{
-						Log.LogError(ex);
-					}
-				}
+				EspCheat.RenderPlayers();
+				EspCheat.RenderEnemies();
+				EspCheat.RenderItems();
+				EspCheat.RenderObjects();
+			}
+			catch (Exception ex)
+			{
+				Log.LogError(ex);
 			}
 		}
 
-		private static void RenderPlayers(Camera cam)
+		private static void RenderPlayers()
 		{
-			bool flag = !Settings.Instance.SettingsData.b_PlayerEsp;
-			if (!flag)
+			if (!Settings.Instance.SettingsData.b_PlayerEsp) return;
+			if (GameDirector.instance == null) return;
+
+			foreach (PlayerAvatar playerAvatar in GameDirector.instance.PlayerList)
 			{
-				bool flag2 = GameDirector.instance == null;
-				if (!flag2)
-				{
-					foreach (PlayerAvatar playerAvatar in GameDirector.instance.PlayerList)
+				if (playerAvatar.IsLocalPlayer()) continue;
+
+				float targetYOffset = playerAvatar.GetComponent<PlayerVisionTarget>().GetField<float>("TargetPosition");
+				Vector3 targetPosition = playerAvatar.transform.position + new Vector3(0f, targetYOffset, 0f);
+
+				float sizeX = 1f;
+				float sizeY = 2.5f;
+				var color = Settings.Instance.SettingsData.c_PlayerEspColor;
+				if (playerAvatar.IsDead())
+				{ 	
+					sizeY = 1f;
+					PlayerDeathHead playerDeathHead = playerAvatar.playerDeathHead;
+					if (playerDeathHead != null)
 					{
-						bool flag3 = playerAvatar == null || playerAvatar.IsLocalPlayer() || playerAvatar.IsDead();
-						if (!flag3)
-						{
-							float field = playerAvatar.GetComponent<PlayerVisionTarget>().GetField<float>("TargetPosition");
-							Vector3 vector = playerAvatar.transform.position + new Vector3(0f, field, 0f);
-							EspCheat.RenderEspElement(Vector3.Lerp(playerAvatar.transform.position, vector, 0.65f), Settings.Instance.SettingsData.b_PlayerNameEsp ? playerAvatar.GetPlayerName() : string.Empty, Settings.Instance.SettingsData.c_PlayerEspColor, cam, float.MaxValue, Settings.Instance.SettingsData.b_Tracer);
-						}
+						targetPosition = playerDeathHead.transform.position;
 					}
+					color = Color.red;
 				}
+				else if (playerAvatar.GetField<bool>("isCrouching"))
+				{
+					sizeY = 1.5f;
+				}
+				else if (playerAvatar.GetField<bool>("isCrawling") || playerAvatar.GetField<bool>("isTumbling") || playerAvatar.GetField<bool>("isSliding"))
+				{
+					sizeY = 1f;
+				}
+
+				string name = string.Empty;
+				if (Settings.Instance.SettingsData.b_PlayerNameEsp)
+				{
+					string playerName = playerAvatar.GetPlayerName();
+					int health = playerAvatar.playerHealth.GetField<int>("health");
+					name = string.Format("{0} {1}HP", playerName, health);
+				}
+
+				RenderEspElement(
+					Vector3.Lerp(playerAvatar.transform.position, targetPosition, 0.65f),
+					(sizeX, sizeY),
+					name,
+					color,
+					float.MaxValue,
+					Settings.Instance.SettingsData.b_Tracer
+				);
 			}
 		}
 
-		private static void RenderEnemies(Camera cam)
+		private static void RenderEnemies()
 		{
 			bool flag = !Settings.Instance.SettingsData.b_EnemyEsp;
 			if (!flag)
@@ -66,22 +95,75 @@ namespace REPX.Cheats
 				{
 					foreach (EnemyParent enemyParent in EnemyDirector.instance.enemiesSpawned)
 					{
-						bool flag3 = enemyParent == null;
-						if (!flag3)
+						try
 						{
-							Enemy field = enemyParent.GetField<Enemy>("Enemy");
-							bool field2 = field.GetField<object>("Health").GetField<bool>("dead");
-							if (!field2)
+							if (enemyParent == null) continue;
+							Enemy enemy = enemyParent.GetField<Enemy>("Enemy");
+							EnemyHealth enemyHealth = enemy.GetField<EnemyHealth>("Health");
+							bool isDead = enemyHealth.GetField<bool>("dead");
+							if (!isDead)
 							{
-								EspCheat.RenderEspElement(field.CenterTransform.position, Settings.Instance.SettingsData.b_EnemyNameEsp ? enemyParent.enemyName : string.Empty, Settings.Instance.SettingsData.c_EnemyEspColor, cam, Settings.Instance.SettingsData.f_EspRange, Settings.Instance.SettingsData.b_Tracer);
+								string name = Settings.Instance.SettingsData.b_EnemyNameEsp ? enemyParent.enemyName : string.Empty;
+								RenderEspElement(
+									enemy.CenterTransform.position,
+									(1f, 1f),
+									name,
+									Settings.Instance.SettingsData.c_EnemyEspColor,
+									Settings.Instance.SettingsData.f_EspRange,
+									Settings.Instance.SettingsData.b_Tracer
+								);
 							}
+						}
+						catch (Exception ex)
+						{
+							Log.LogInfo("RenderEnemies Failed");
+							Log.LogError(ex);
 						}
 					}
 				}
 			}
 		}
 
-		private static void RenderItems(Camera cam)
+		private static (float width, float height) CalculateObjectBounds(PhysGrabObject physGrabObject, float distance)
+		{
+			try
+			{
+				Camera cam = Camera.main;
+				if (cam == null) return (1f, 1f);
+
+				// Get the bounding box size (Vector3)
+				Vector3 boundingBoxSize = physGrabObject.boundingBox;
+
+				// Get the direction from camera to object
+				Vector3 cameraToObject = (physGrabObject.centerPoint - cam.transform.position).normalized;
+
+				// Get object's right and forward vectors (world space)
+				Vector3 objectRight = physGrabObject.transform.right;
+				Vector3 objectForward = physGrabObject.transform.forward;
+
+				// Calculate how much each axis is facing the camera using dot product
+				float rightDot = Mathf.Abs(Vector3.Dot(cameraToObject, objectRight));
+				float forwardDot = Mathf.Abs(Vector3.Dot(cameraToObject, objectForward));
+
+				// Use the axis that's most perpendicular to the camera view (smaller dot = more visible)
+				float width = (rightDot < forwardDot) ? boundingBoxSize.x : boundingBoxSize.z;
+				float height = boundingBoxSize.y;
+
+				// Scale factor inversely with distance to maintain consistent appearance
+				float distanceScale = Mathf.Clamp(10f / distance, 1f, 10f);
+
+				return (width * distanceScale, height * distanceScale);
+			}
+			catch (Exception ex)
+			{
+				Log.LogError(ex);
+			}
+
+			// Fallback to default size
+			return (1f, 1f);
+		}
+
+		private static void RenderItems()
 		{
 			bool flag = !Settings.Instance.SettingsData.b_ItemEsp;
 			if (!flag)
@@ -91,32 +173,71 @@ namespace REPX.Cheats
 				{
 					foreach (PhysGrabObject physGrabObject in MonoHelper.CatchedPhysGrabObjects)
 					{
-						bool flag3 = physGrabObject == null;
-						if (!flag3)
+						try
 						{
-							if (physGrabObject.GetField<bool>("isValuable"))
+							bool flag3 = physGrabObject == null;
+							if (!flag3)
 							{
-								var name = physGrabObject.name.Replace("(Clone)", "");
-								var color = Settings.Instance.SettingsData.c_ItemEspColor;
-								var draw_name = Settings.Instance.SettingsData.b_ItemNameEsp ? name : string.Empty;
-								EspCheat.RenderEspElement(physGrabObject.centerPoint, draw_name, color, cam, Settings.Instance.SettingsData.f_EspRange, Settings.Instance.SettingsData.b_Tracer);
+								// Calculate distance once for reuse
+								float distance = Vector3.Distance(physGrabObject.centerPoint, Camera.main.transform.parent.position);
+								
+								if (physGrabObject.GetField<bool>("isValuable"))
+								{
+									var name = physGrabObject.name.Replace("(Clone)", "");
+									int value = (int)physGrabObject.GetComponent<ValuableObject>().GetField<float>("dollarValueCurrent");
+									// Determine color based on value ranges
+									Color color;
+									if (value < 5000)
+									{
+										color = Settings.Instance.SettingsData.c_ItemEspColorLow;
+									}
+									else if (value >= 5000 && value <= 10000)
+									{
+										color = Settings.Instance.SettingsData.c_ItemEspColorMedium;
+									}
+									else // value > 10000
+									{
+										color = Settings.Instance.SettingsData.c_ItemEspColorHigh;
+									}
+									var draw_name = Settings.Instance.SettingsData.b_ItemValueEsp ? string.Format("${0:N0}", value) : string.Empty;
+									RenderEspElement(
+										physGrabObject.centerPoint,
+										CalculateObjectBounds(physGrabObject, distance), 
+										draw_name, 
+										color, 
+										Settings.Instance.SettingsData.f_EspRange, 
+										Settings.Instance.SettingsData.b_Tracer
+									);
+								}
+								if (physGrabObject.GetField<bool>("isCart"))
+								{
+									PhysGrabCart cart = physGrabObject.GetComponent<PhysGrabCart>();
+									int cartValue = cart.GetField<int>("haulCurrent");
+									var name = physGrabObject.name.Replace("(Clone)", "");
+									var color = Settings.Instance.SettingsData.c_CartEspColor;
+									var draw_name = Settings.Instance.SettingsData.b_ItemValueEsp ? string.Format("{0} ${1:N0}", name, cartValue) : string.Empty;
+									RenderEspElement(
+										physGrabObject.centerPoint,
+										CalculateObjectBounds(physGrabObject, distance),
+										draw_name,
+										color,
+										Settings.Instance.SettingsData.f_EspRange,
+										Settings.Instance.SettingsData.b_Tracer
+									);
+								}
 							}
-							if (physGrabObject.GetField<bool>("isCart"))
-							{
-								PhysGrabCart cart = physGrabObject.GetComponent<PhysGrabCart>();
-								int cartValue = cart.GetField<int>("haulCurrent");
-								var name = physGrabObject.name.Replace("(Clone)", "");
-								var color = Settings.Instance.SettingsData.c_CartEspColor;
-								var draw_name = Settings.Instance.SettingsData.b_ItemNameEsp ? string.Format("{0} ${1:N0}", name, cartValue) : string.Empty;
-								EspCheat.RenderEspElement(physGrabObject.centerPoint, draw_name, color, cam, Settings.Instance.SettingsData.f_EspRange, Settings.Instance.SettingsData.b_Tracer);
-							}
+						}
+						catch (Exception ex)
+						{
+							Log.LogInfo("RenderItems Failed");
+							Log.LogError(ex);
 						}
 					}
 				}
 			}
 		}
 
-		private static void RenderObjects(Camera cam)
+		private static void RenderObjects()
 		{
 			int num = 0;
 			foreach (GameObject gameObject in RoundDirector.instance.GetField<List<GameObject>>("extractionPointList"))
@@ -125,38 +246,79 @@ namespace REPX.Cheats
 				bool flag = gameObject == null;
 				if (!flag)
 				{
-					EspCheat.RenderEspElement(gameObject.transform.position, string.Format("Extraction Point ({0})", num), Color.white, cam, Settings.Instance.SettingsData.f_EspRange, false);
+					EspCheat.RenderEspElement(
+						gameObject.transform.position,
+						( 1f, 1f ),
+						string.Format("Extraction Point ({0})", num),
+						Color.white,
+						Settings.Instance.SettingsData.f_EspRange,
+						false
+					);
 				}
 			}
 		}
 
-		private static void RenderEspElement(Vector3 worldPos, string name, Color color, Camera cam, float Range = 3.4028235E+38f, bool tracer = false)
+		private static void RenderEspElement(Vector3 worldPos, (float x, float y) size, string name, Color color, float Range = float.MaxValue, bool tracer = false)
 		{
-			Vector3 vector = cam.WorldToViewportPoint(worldPos);
-			float num = Mathf.Round(Vector3.Distance(worldPos, cam.transform.position));
-			bool flag = vector.z < 0f || num > Range;
-			if (!flag)
+			var cam = Camera.main;
+			Vector3 viewportPos = cam.WorldToViewportPoint(worldPos);
+
+			float distance = Mathf.Round(Vector3.Distance(worldPos, cam.transform.parent.position));
+			if (viewportPos.z < 0 || distance > Range) return;
+
+			Vector2 screenPos = new Vector2(
+				viewportPos.x * Screen.width,
+				(1 - viewportPos.y) * Screen.height
+			);
+
+			// Base box size (scales with distance)
+			float baseBoxSize = Mathf.Clamp(1000f / distance, 10f, 50f);
+
+			// Apply size multiplier (e.g., for width/height adjustments)
+			float boxWidth = baseBoxSize * size.x;
+			float boxHeight = baseBoxSize * size.y;
+
+			bool isInView = viewportPos.x >= 0 && viewportPos.x <= 1 && viewportPos.y >= 0 && viewportPos.y <= 1;
+
+			if (isInView)
 			{
-				Vector2 vector2 = new Vector2(vector.x * (float)Screen.width, (1f - vector.y) * (float)Screen.height);
-				float num2 = Mathf.Clamp(1000f / num, 10f, 50f);
-				bool flag2 = vector.x >= 0f && vector.x <= 1f && vector.y >= 0f && vector.y <= 1f;
-				bool flag3 = flag2;
-				if (flag3)
+				// Calculate the top-left corner to keep the box centered on screenPos
+				Vector2 boxTopLeft = new Vector2(
+					screenPos.x - (boxWidth * 0.5f),  // Center horizontally
+					screenPos.y - (boxHeight * 0.5f)  // Center vertically
+				);
+
+				// Draw the box
+				Render.Box(
+					boxTopLeft,
+					new Vector2(boxWidth, boxHeight),
+					2f,
+					color
+				);
+
+				// Draw the name label (above the box)
+				if (!string.IsNullOrEmpty(name))
 				{
-					Vector2 vector3 = new Vector2(vector2.x - num2 * 0.5f, vector2.y - num2 * 0.5f);
-					Render.Box(vector3, new Vector2(num2, num2), 2f, color, true);
-					bool flag4 = name != string.Empty;
-					if (flag4)
-					{
-						Render.String(GUI.skin.label, vector2.x, vector2.y - num2 - 5f, 200f, 20f, name, Color.white, true, false);
-					}
+					Render.String(
+						GUI.skin.label,
+						screenPos.x,  // Centered horizontally
+						screenPos.y - (boxHeight * 0.5f) - 20f,  // Place above the box
+						200f, 20f,
+						name,
+						Color.white,
+						true
+					);
 				}
-				if (tracer)
-				{
-					Vector2 vector4 = new Vector2((float)Screen.width / 2f, (float)Screen.height / 2f);
-					Vector2 vector5 = (flag2 ? vector2 : new Vector2(Mathf.Clamp(vector.x * (float)Screen.width, 0f, (float)Screen.width), Mathf.Clamp((1f - vector.y) * (float)Screen.height, 0f, (float)Screen.height)));
-					Render.Line(vector4, vector5, 1f, color);
-				}
+			}
+
+			if (tracer)
+			{
+				Vector2 screenCenter = new Vector2(Screen.width / 2f, Screen.height / 2f);
+				Vector2 tracerEndPos = isInView ? screenPos : new Vector2(
+					Mathf.Clamp(viewportPos.x * Screen.width, 0, Screen.width),
+					Mathf.Clamp((1 - viewportPos.y) * Screen.height, 0, Screen.height)
+				);
+				Render.Line(screenCenter, tracerEndPos, 1f, color);
 			}
 		}
 

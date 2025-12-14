@@ -45,7 +45,7 @@ namespace REPX.Data
 		public bool b_ItemEsp;
 
 		// Token: 0x04000042 RID: 66
-		public bool b_ItemNameEsp;
+		public bool b_ItemValueEsp;
 
 		// Token: 0x04000043 RID: 67
 		public bool b_PlayerEsp;
@@ -99,13 +99,15 @@ namespace REPX.Data
 		public Color c_Theme = new Color(1f, 1f, 1f, 1f);
 
 		// Token: 0x04000054 RID: 84
-		public Color c_PlayerEspColor = Color.white;
+		public Color c_PlayerEspColor = new Color(0.5f, 1f, 0.5f, 1f);
 
 		// Token: 0x04000055 RID: 85
 		public Color c_EnemyEspColor = Color.red;
 
 		// Token: 0x04000056 RID: 86
-		public Color c_ItemEspColor = Color.cyan;
+		public Color c_ItemEspColorLow = Color.blue;
+		public Color c_ItemEspColorMedium = new Color(0f, 0.5f, 1f, 1f);
+		public Color c_ItemEspColorHigh = Color.cyan;
 
 		public Color c_CartEspColor = Color.yellow;
 	}

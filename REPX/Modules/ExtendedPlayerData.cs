@@ -54,8 +54,5 @@ namespace REPX.Modules
 
 		// Token: 0x0400002B RID: 43
 		internal static Dictionary<PlayerAvatar, ExtendedPlayerData> _extendedPlayerData = new Dictionary<PlayerAvatar, ExtendedPlayerData>();
-
-		// Token: 0x0400002D RID: 45
-		internal bool isInvisible;
 	}
 }

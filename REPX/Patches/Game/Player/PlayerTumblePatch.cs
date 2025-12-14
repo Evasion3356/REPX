@@ -41,7 +41,7 @@ namespace REPX.Patches.Game.Player
 		// Token: 0x06000074 RID: 116 RVA: 0x00006290 File Offset: 0x00004490
 		[HarmonyPatch("TumbleSetRPC")]
 		[HarmonyPrefix]
-		private static bool TumbleSetRPC_Prefix(PlayerTumble __instance)
+		private static bool TumbleSetRPC_Prefix(PlayerTumble __instance, bool _isTumbling, bool _playerInput, PhotonMessageInfo _info)
 		{
 			bool flag = !__instance.playerAvatar.IsLocalPlayer();
 			bool flag2;

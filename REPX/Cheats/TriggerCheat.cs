@@ -61,7 +61,7 @@ namespace REPX.Cheats
 					{
 						Enemy enemy = enemyParent.GetEnemy();
 						targetPosition = enemy.CenterTransform.position;
-						var enemyRb = enemy.GetField<Rigidbody>("Rigidbody");
+						var enemyRb = enemy.GetField<EnemyRigidbody>("Rigidbody");
 						if (enemyRb != null)
 						{
 							SetAngleFromRigidBody(enemyRb.GetField<Rigidbody>("rb"), defaultMaxAngle, ref currentMaxAngle);

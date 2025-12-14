@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using HarmonyLib;
 using REPX.Data;
+using UnityEngine;
 
 namespace REPX.Patches.Game.Player
 {
@@ -24,7 +25,7 @@ namespace REPX.Patches.Game.Player
 		// Token: 0x0600006E RID: 110 RVA: 0x00006180 File Offset: 0x00004380
 		[HarmonyPatch("ForceImpulse")]
 		[HarmonyPrefix]
-		private static bool ForceImpulse_Prefix()
+		private static bool ForceImpulse_Prefix(Vector3 force)
 		{
 			bool b_AntiKnockBack = Settings.Instance.SettingsData.b_AntiKnockBack;
 			return !b_AntiKnockBack;

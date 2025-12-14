@@ -83,7 +83,7 @@ namespace REPX.Extensions
 			{
 				steamId = pa.GetSteamId();
 			}
-			pa.photonView.RPC("AddToStatsManagerRPC", RpcTarget.MasterClient, new object[] { name, steamId });
+			pa.photonView.RPC("AddToStatsManagerRPC", RpcTarget.AllBuffered, new object[] { name, steamId });
 		}
 	}
 }
