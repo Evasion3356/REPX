@@ -42,7 +42,7 @@ namespace REPX.Cheats
 				if (playerAvatar.IsLocalPlayer()) continue;
 
 				float targetYOffset = playerAvatar.GetComponent<PlayerVisionTarget>().GetField<float>("TargetPosition");
-				Vector3 targetPosition = playerAvatar.transform.position + new Vector3(0f, targetYOffset, 0f);
+				Vector3 targetPosition = playerAvatar.playerAvatarVisuals.transform.position + new Vector3(0f, targetYOffset, 0f);
 
 				float sizeX = 1f;
 				float sizeY = 2.5f;
@@ -53,9 +53,9 @@ namespace REPX.Cheats
 					PlayerDeathHead playerDeathHead = playerAvatar.playerDeathHead;
 					if (playerDeathHead != null)
 					{
-						targetPosition = playerDeathHead.transform.position;
+						targetPosition = playerDeathHead.GetField<PhysGrabObject>("physGrabObject").rb.position;
 					}
-					color = Color.red;
+					color = Color.magenta;
 				}
 				else if (playerAvatar.GetField<bool>("isCrouching"))
 				{
@@ -101,7 +101,8 @@ namespace REPX.Cheats
 							Enemy enemy = enemyParent.GetField<Enemy>("Enemy");
 							EnemyHealth enemyHealth = enemy.GetField<EnemyHealth>("Health");
 							bool isDead = enemyHealth.GetField<bool>("dead");
-							if (!isDead)
+							bool isSpawned = enemyParent.GetField<bool>("Spawned");
+							if (!isDead && isSpawned)
 							{
 								string name = Settings.Instance.SettingsData.b_EnemyNameEsp ? enemyParent.enemyName : string.Empty;
 								RenderEspElement(
