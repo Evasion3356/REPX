@@ -41,41 +41,49 @@ namespace REPX.Cheats
 			{
 				if (playerAvatar.IsLocalPlayer()) continue;
 
-				float targetYOffset = playerAvatar.GetComponent<PlayerVisionTarget>().GetField<float>("TargetPosition");
-				Vector3 targetPosition = playerAvatar.playerAvatarVisuals.transform.position + new Vector3(0f, targetYOffset, 0f);
+				Vector3 targetPosition = playerAvatar.playerAvatarVisuals.bodyTopUpTransform.position;
 
 				float sizeX = 1f;
 				float sizeY = 2.5f;
 				var color = Settings.Instance.SettingsData.c_PlayerEspColor;
+				string name = string.Empty;
+
 				if (playerAvatar.IsDead())
 				{ 	
 					sizeY = 1f;
 					PlayerDeathHead playerDeathHead = playerAvatar.playerDeathHead;
 					if (playerDeathHead != null)
 					{
-						targetPosition = playerDeathHead.GetField<PhysGrabObject>("physGrabObject").rb.position;
+						targetPosition = playerDeathHead.GetField<PhysGrabObject>("physGrabObject").centerPoint;
 					}
 					color = Color.magenta;
+					if (Settings.Instance.SettingsData.b_PlayerNameEsp)
+					{
+						string playerName = playerAvatar.GetPlayerName();
+						int health = playerAvatar.playerHealth.GetField<int>("health");
+						name = string.Format("{0}", playerName);
+					}
 				}
-				else if (playerAvatar.GetField<bool>("isCrouching"))
+				else
 				{
-					sizeY = 1.5f;
-				}
-				else if (playerAvatar.GetField<bool>("isCrawling") || playerAvatar.GetField<bool>("isTumbling") || playerAvatar.GetField<bool>("isSliding"))
-				{
-					sizeY = 1f;
-				}
-
-				string name = string.Empty;
-				if (Settings.Instance.SettingsData.b_PlayerNameEsp)
-				{
-					string playerName = playerAvatar.GetPlayerName();
-					int health = playerAvatar.playerHealth.GetField<int>("health");
-					name = string.Format("{0} {1}HP", playerName, health);
+					if (Settings.Instance.SettingsData.b_PlayerNameEsp)
+					{
+						string playerName = playerAvatar.GetPlayerName();
+						int health = playerAvatar.playerHealth.GetField<int>("health");
+						name = string.Format("{0} {1}HP", playerName, health);
+					}
+					if (playerAvatar.GetField<bool>("isCrouching"))
+					{
+						sizeY = 1.5f;
+					}
+					else if (playerAvatar.GetField<bool>("isCrawling") || playerAvatar.GetField<bool>("isTumbling") || playerAvatar.GetField<bool>("isSliding"))
+					{
+						sizeY = 1f;
+					}
 				}
 
 				RenderEspElement(
-					Vector3.Lerp(playerAvatar.transform.position, targetPosition, 0.65f),
+					targetPosition,
 					(sizeX, sizeY),
 					name,
 					color,
