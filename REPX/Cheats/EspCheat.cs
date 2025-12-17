@@ -14,6 +14,7 @@ namespace REPX.Cheats
 {
 	internal static class EspCheat
 	{
+		static readonly Color orange = new Color(1f, 0.5f, 0f, 1f);
 		internal static void RenderEsp()
 		{
 			if (!Settings.Instance.SettingsData.b_Esp) return;
@@ -25,6 +26,7 @@ namespace REPX.Cheats
 				EspCheat.RenderEnemies();
 				EspCheat.RenderItems();
 				EspCheat.RenderObjects();
+				EspCheat.RenderLaser();
 			}
 			catch (Exception ex)
 			{
@@ -110,9 +112,15 @@ namespace REPX.Cheats
 							EnemyHealth enemyHealth = enemy.GetField<EnemyHealth>("Health");
 							bool isDead = enemyHealth.GetField<bool>("dead");
 							bool isSpawned = enemyParent.GetField<bool>("Spawned");
+							string name = string.Empty;
+							if (Settings.Instance.SettingsData.b_EnemyNameEsp)
+							{
+								int enemyCurrentHealth = enemyHealth.GetField<int>("healthCurrent");
+								name = string.Format("{0} {1}HP", enemyParent.enemyName, enemyCurrentHealth);
+							}
 							if (!isDead && isSpawned)
 							{
-								string name = Settings.Instance.SettingsData.b_EnemyNameEsp ? enemyParent.enemyName : string.Empty;
+								
 								RenderEspElement(
 									enemy.CenterTransform.position,
 									(1f, 1f),
@@ -185,14 +193,14 @@ namespace REPX.Cheats
 						try
 						{
 							bool flag3 = physGrabObject == null;
-							if (!flag3)
+							if (!flag3 && physGrabObject.GetField<bool>("isActive"))
 							{
+								ItemAttributes itemAttributes = physGrabObject.GetComponent<ItemAttributes>();
 								// Calculate distance once for reuse
 								float distance = Vector3.Distance(physGrabObject.centerPoint, Camera.main.transform.parent.position);
 								
 								if (physGrabObject.GetField<bool>("isValuable"))
 								{
-									var name = physGrabObject.name.Replace("(Clone)", "");
 									int value = (int)physGrabObject.GetComponent<ValuableObject>().GetField<float>("dollarValueCurrent");
 									// Determine color based on value ranges
 									Color color;
@@ -222,13 +230,52 @@ namespace REPX.Cheats
 								{
 									PhysGrabCart cart = physGrabObject.GetComponent<PhysGrabCart>();
 									int cartValue = cart.GetField<int>("haulCurrent");
-									var name = physGrabObject.name.Replace("(Clone)", "");
+									var name = itemAttributes.GetField<string>("itemName");
 									var color = Settings.Instance.SettingsData.c_CartEspColor;
 									var draw_name = Settings.Instance.SettingsData.b_ItemValueEsp ? string.Format("{0} ${1:N0}", name, cartValue) : string.Empty;
 									RenderEspElement(
 										physGrabObject.centerPoint,
 										CalculateObjectBounds(physGrabObject, distance),
 										draw_name,
+										color,
+										Settings.Instance.SettingsData.f_EspRange,
+										Settings.Instance.SettingsData.b_Tracer
+									);
+								}
+								bool isGun = physGrabObject.GetField<bool>("isGun");
+								bool isMelee = physGrabObject.GetField<bool>("isMelee");
+								if (isGun || isMelee)
+								{
+									var name = itemAttributes.GetField<string>("itemName");
+									/*if (isGun)
+									{
+										name = physGrabObject.name.Replace("Item Gun ", "");
+									}
+									else if (isMelee)
+									{
+										name = physGrabObject.name.Replace("Item Melee ", "");
+									}
+									name.Replace("(Clone)", "").Trim();*/
+									var color = Settings.Instance.SettingsData.c_WeaponEspColor;
+									RenderEspElement(
+										physGrabObject.centerPoint,
+										CalculateObjectBounds(physGrabObject, distance),
+										name,
+										color,
+										Settings.Instance.SettingsData.f_EspRange,
+										Settings.Instance.SettingsData.b_Tracer
+									);
+								}
+								if (physGrabObject.GetComponent<ItemDrone>())
+								{
+									var name = itemAttributes.GetField<string>("itemName");
+									//name.Replace("Item Drone", "");
+									//name.Replace("(Clone))", "").Trim();
+									var color = Settings.Instance.SettingsData.c_ItemEspColorDrone;
+									RenderEspElement(
+										physGrabObject.centerPoint,
+										CalculateObjectBounds(physGrabObject, distance),
+										name,
 										color,
 										Settings.Instance.SettingsData.f_EspRange,
 										Settings.Instance.SettingsData.b_Tracer
@@ -248,21 +295,106 @@ namespace REPX.Cheats
 
 		private static void RenderObjects()
 		{
-			int num = 0;
-			foreach (GameObject gameObject in RoundDirector.instance.GetField<List<GameObject>>("extractionPointList"))
+			if (Settings.Instance.SettingsData.b_extractionESP)
 			{
-				num++;
-				bool flag = gameObject == null;
-				if (!flag)
+				int num = 0;
+				foreach (GameObject gameObject in RoundDirector.instance.GetField<List<GameObject>>("extractionPointList"))
+				{
+					num++;
+					bool flag = gameObject == null;
+					if (!flag)
+					{
+						ExtractionPoint ep = gameObject.GetComponent<ExtractionPoint>();
+						if (ep != null)
+						{
+							if (ep.GetField<ExtractionPoint.State>("currentState") == ExtractionPoint.State.Complete) continue;
+
+							Color color = Color.white;
+							if (ep == RoundDirector.instance.GetField<ExtractionPoint>("extractionPointCurrent"))
+							{
+								color = Color.green;
+							}
+							EspCheat.RenderEspElement(
+								gameObject.transform.position,
+								(1f, 1f),
+								string.Format("Extraction Point ({0})", num),
+								color,
+								Settings.Instance.SettingsData.f_EspRange,
+								false
+							);
+						}
+					}
+				}
+			}
+			if (Settings.Instance.SettingsData.b_truckESP)
+			{
+				var levelPathTruck = LevelGenerator.Instance.LevelPathTruck;
+				if (levelPathTruck)
 				{
 					EspCheat.RenderEspElement(
-						gameObject.transform.position,
-						( 1f, 1f ),
-						string.Format("Extraction Point ({0})", num),
-						Color.white,
+						levelPathTruck.transform.position,
+						(2f, 2f),
+						"Truck",
+						orange,
 						Settings.Instance.SettingsData.f_EspRange,
 						false
 					);
+				}
+			}
+		}
+
+		private static void RenderLaser()
+		{
+			bool flag = !Settings.Instance.SettingsData.b_LaserESP;
+			if (!flag)
+			{
+				bool flag2 = SemiFunc.RunIsLobby();
+				if (!flag2)
+				{
+					foreach (PhysGrabObject physGrabObject in MonoHelper.CatchedPhysGrabObjects)
+					{
+						try
+						{
+							bool flag3 = physGrabObject == null;
+							if (!flag3 && physGrabObject.grabbedLocal && physGrabObject.GetField<bool>("isActive"))
+							{
+								bool isGun = physGrabObject.GetField<bool>("isGun");
+								if (isGun)
+								{
+									ItemGun itemGun = physGrabObject.GetComponent<ItemGun>();
+									if (itemGun != null && itemGun.gunMuzzle != null)
+									{
+										Vector3 barrelPosition = itemGun.gunMuzzle.position;
+										Vector3 barrelDirection = itemGun.gunMuzzle.forward;
+
+										// Calculate the end point of the laser (e.g., 100 units forward)
+										float laserDistance = 100f;
+										Vector3 laserEndPoint = barrelPosition + (barrelDirection * laserDistance);
+
+										// Convert world positions to screen positions
+										Vector3 screenStart;
+										Vector3 screenEnd;
+										if (Utils.WorldToScreen(Camera.main, barrelPosition, out screenStart) &&
+											Utils.WorldToScreen(Camera.main, laserEndPoint, out screenEnd))
+										{
+											// Draw the laser line
+											Render.Line(
+												new Vector2(screenStart.x, screenStart.y),
+												new Vector2(screenEnd.x, screenEnd.y),
+												2f,
+												Color.red
+											);
+										}
+									}
+								}
+							}
+						}
+						catch (Exception ex)
+						{
+							Log.LogInfo("RenderLaser Failed");
+							Log.LogError(ex);
+						}
+					}
 				}
 			}
 		}

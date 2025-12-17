@@ -108,7 +108,16 @@ namespace REPX.Data
 		public Color c_ItemEspColorLow = Color.blue;
 		public Color c_ItemEspColorMedium = new Color(0f, 0.5f, 1f, 1f);
 		public Color c_ItemEspColorHigh = Color.cyan;
+		public Color c_ItemEspColorDrone = Color.green;
 
 		public Color c_CartEspColor = Color.yellow;
+
+		public Color c_WeaponEspColor = Color.cyan;
+
+		public bool b_LaserESP;
+
+		public bool b_extractionESP;
+
+		public bool b_truckESP;
 	}
 }

@@ -342,6 +342,9 @@ namespace REPX
 				{
 					UI.Checkbox(ref this._settingsData.b_EnemyNameEsp, "Enemy Name Esp", "Show names above highlighted enemies.");
 				}
+				UI.Checkbox(ref this._settingsData.b_LaserESP, "Weapon Laser ESP", "Draws a laser from your gun to where it's aiming while holding it.");
+				UI.Checkbox(ref this._settingsData.b_extractionESP, "Extraction ESP", "Draws a box on the extraction point.");
+				UI.Checkbox(ref this._settingsData.b_truckESP, "Truck ESP", "Draws a box on truck.");
 			}
 		}
 
@@ -799,7 +802,9 @@ namespace REPX
 				UI.ColorPicker(ref this._settingsData.c_ItemEspColorLow, "Item Low Value Esp Color");
 				UI.ColorPicker(ref this._settingsData.c_ItemEspColorMedium, "Item Medium Value Esp Color");
 				UI.ColorPicker(ref this._settingsData.c_ItemEspColorHigh, "Item High Value Esp Color");
+				UI.ColorPicker(ref this._settingsData.c_ItemEspColorDrone, "Drone Esp Color");
 				UI.ColorPicker(ref this._settingsData.c_CartEspColor, "Cart Esp Color");
+				UI.ColorPicker(ref this._settingsData.c_WeaponEspColor, "Weapon Esp Color");
 			}
 		}
 
