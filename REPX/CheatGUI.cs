@@ -47,7 +47,7 @@ namespace REPX
 			Harmony harmony = CheatGUI.harmony;
 			if (harmony != null)
 			{
-				harmony.UnpatchAll(CheatGUI.GUID);  // Changed from UnpatchSelf()
+				harmony.UnpatchAll(CheatGUI.GUID);
 			}
 			this._settingsData = null;
 		}
@@ -60,10 +60,23 @@ namespace REPX
 
 		private void OnGUI()
 		{
-			if (Input.GetKey(KeyCode.F12) || Input.GetKey(KeyCode.RightShift)) //Screenshot check.
+			if (Input.GetKey(KeyCode.F12) || Input.GetKey(KeyCode.RightShift))
 			{
 				return;
 			}
+
+			// Collect and render ESP data for external window
+			RenderExternalESP();
+
+			try
+			{
+				TriggerCheat.GetMonoTrigger();
+			}
+			catch (Exception ex)
+			{
+				Log.LogError(ex);
+			}
+
 			bool flag = !this._initialized;
 			if (!flag)
 			{
@@ -78,16 +91,10 @@ namespace REPX
 						fontStyle = FontStyle.Bold
 					};
 				}
-				this.DrawWatermark();
 				bool flag2 = Settings.Instance != null && Settings.Instance.b_IsMenuOpen;
 				if (flag2)
 				{
 					Settings.Instance.WindowRect = GUILayout.Window(0, Settings.Instance.WindowRect, new GUI.WindowFunction(this.MenuContent), "REPX", Array.Empty<GUILayoutOption>());
-				}
-				bool flag3 = !SemiFunc.IsMainMenu() && !SemiFunc.RunIsLobbyMenu() && !LoadingUI.instance.gameObject.activeSelf;
-				if (flag3)
-				{
-					EspCheat.RenderEsp();
 				}
 			}
 		}
@@ -96,13 +103,368 @@ namespace REPX
 		{
 			this.MenuUpdate();
 			this.SelectedPlayerUpdate();
+		}
+
+		private void RenderExternalESP()
+		{
+			if (!Settings.Instance.SettingsData.b_Esp) return;
+			if (Camera.main == null) return;
+
 			try
 			{
-				TriggerCheat.GetMonoTrigger();
+				var espData = new ExternalWindow.ESPRenderData();
+				var cam = Camera.main;
+				var settings = Settings.Instance.SettingsData;
+
+				// Render Players
+				if (settings.b_PlayerEsp && GameDirector.instance != null)
+				{
+					foreach (PlayerAvatar playerAvatar in GameDirector.instance.PlayerList)
+					{
+						try
+						{
+							if (playerAvatar.IsLocalPlayer()) continue;
+
+							Vector3 targetPosition = playerAvatar.playerAvatarVisuals.bodyTopUpTransform.position;
+							float sizeX = 1f;
+							float sizeY = 2.5f;
+							Color color = settings.c_PlayerEspColor;
+							string name = string.Empty;
+
+							if (playerAvatar.IsDead())
+							{
+								sizeY = 1f;
+								PlayerDeathHead playerDeathHead = playerAvatar.playerDeathHead;
+								if (playerDeathHead != null)
+								{
+									targetPosition = playerDeathHead.GetField<PhysGrabObject>("physGrabObject").centerPoint;
+								}
+								color = Color.magenta;
+								if (settings.b_PlayerNameEsp)
+								{
+									string playerName = playerAvatar.GetPlayerName();
+									name = playerName;
+								}
+							}
+							else
+							{
+								if (settings.b_PlayerNameEsp)
+								{
+									string playerName = playerAvatar.GetPlayerName();
+									int health = playerAvatar.playerHealth.GetField<int>("health");
+									name = string.Format("{0} {1}HP", playerName, health);
+								}
+								if (playerAvatar.GetField<bool>("isCrouching"))
+								{
+									sizeY = 1.5f;
+								}
+								else if (playerAvatar.GetField<bool>("isCrawling") || playerAvatar.GetField<bool>("isTumbling") || playerAvatar.GetField<bool>("isSliding"))
+								{
+									sizeY = 1f;
+								}
+							}
+
+							AddEspElement(espData, cam, targetPosition, (sizeX, sizeY), name, color, float.MaxValue, settings.b_Tracer);
+						}
+						catch (Exception ex)
+						{
+							Log.LogError("RenderExternalESP - Player Failed: " + ex.ToString());
+						}
+					}
+				}
+
+				// Render Enemies
+				if (settings.b_EnemyEsp && EnemyDirector.instance != null)
+				{
+					foreach (EnemyParent enemyParent in EnemyDirector.instance.enemiesSpawned)
+					{
+						try
+						{
+							if (enemyParent == null) continue;
+
+							Enemy enemy = enemyParent.GetField<Enemy>("Enemy");
+							if (enemy == null) continue;
+
+							EnemyHealth enemyHealth = enemy.GetField<EnemyHealth>("Health");
+							if (enemyHealth == null) continue;
+
+							bool isDead = enemyHealth.GetField<bool>("dead");
+							bool isSpawned = enemyParent.GetField<bool>("Spawned");
+
+							if (!isDead && isSpawned)
+							{
+								string name = string.Empty;
+								if (settings.b_EnemyNameEsp)
+								{
+									int enemyCurrentHealth = enemyHealth.GetField<int>("healthCurrent");
+									name = string.Format("{0} {1}HP", enemyParent.enemyName, enemyCurrentHealth);
+								}
+
+								AddEspElement(espData, cam, enemy.CenterTransform.position, (1f, 1f), name, settings.c_EnemyEspColor, settings.f_EspRange, settings.b_Tracer);
+							}
+						}
+						catch (Exception ex)
+						{
+							Log.LogError("RenderExternalESP - Enemy Failed: " + ex.ToString());
+						}
+					}
+				}
+
+				// Render Items
+				if (settings.b_ItemEsp && !SemiFunc.RunIsLobby())
+				{
+					foreach (PhysGrabObject physGrabObject in MonoHelper.CatchedPhysGrabObjects)
+					{
+						try
+						{
+							if (physGrabObject == null || !physGrabObject.GetField<bool>("isActive")) continue;
+
+							ItemAttributes itemAttributes = physGrabObject.GetComponent<ItemAttributes>();
+							float distance = Vector3.Distance(physGrabObject.centerPoint, cam.transform.parent.position);
+							var bounds = CalculateObjectBounds(physGrabObject, distance);
+
+							// Valuables
+							if (physGrabObject.GetField<bool>("isValuable"))
+							{
+								int value = (int)physGrabObject.GetComponent<ValuableObject>().GetField<float>("dollarValueCurrent");
+								Color color;
+								if (value < 5000)
+									color = settings.c_ItemEspColorLow;
+								else if (value >= 5000 && value <= 10000)
+									color = settings.c_ItemEspColorMedium;
+								else
+									color = settings.c_ItemEspColorHigh;
+
+								string drawName = settings.b_ItemValueEsp ? string.Format("${0:N0}", value) : string.Empty;
+								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, drawName, color, settings.f_EspRange, settings.b_Tracer);
+							}
+
+							// Carts
+							if (physGrabObject.GetField<bool>("isCart"))
+							{
+								PhysGrabCart cart = physGrabObject.GetComponent<PhysGrabCart>();
+								int cartValue = cart.GetField<int>("haulCurrent");
+								string itemName = itemAttributes.GetField<string>("itemName");
+								string drawName = settings.b_ItemValueEsp ? string.Format("{0} ${1:N0}", itemName, cartValue) : string.Empty;
+								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, drawName, settings.c_CartEspColor, settings.f_EspRange, settings.b_Tracer);
+							}
+
+							// Weapons (Guns & Melee)
+							bool isGun = physGrabObject.GetField<bool>("isGun");
+							bool isMelee = physGrabObject.GetField<bool>("isMelee");
+							if (isGun || isMelee)
+							{
+								string itemName = itemAttributes.GetField<string>("itemName");
+								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, itemName, settings.c_WeaponEspColor, settings.f_EspRange, settings.b_Tracer);
+							}
+
+							// Drones
+							if (physGrabObject.GetComponent<ItemDrone>())
+							{
+								string itemName = itemAttributes.GetField<string>("itemName");
+								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, itemName, settings.c_ItemEspColorDrone, settings.f_EspRange, settings.b_Tracer);
+							}
+						}
+						catch (Exception ex)
+						{
+							Log.LogError("RenderExternalESP - Item Failed: " + ex.ToString());
+						}
+					}
+				}
+
+				// Render Objects (Extraction & Truck)
+				if (settings.b_extractionESP && RoundDirector.instance != null)
+				{
+					int num = 0;
+					foreach (GameObject gameObject in RoundDirector.instance.GetField<List<GameObject>>("extractionPointList"))
+					{
+						num++;
+						try
+						{
+							if (gameObject == null) continue;
+
+							ExtractionPoint ep = gameObject.GetComponent<ExtractionPoint>();
+							if (ep != null)
+							{
+								if (ep.GetField<ExtractionPoint.State>("currentState") == ExtractionPoint.State.Complete) continue;
+
+								Color color = Color.white;
+								if (ep == RoundDirector.instance.GetField<ExtractionPoint>("extractionPointCurrent"))
+								{
+									color = Color.green;
+								}
+
+								AddEspElement(espData, cam, gameObject.transform.position, (1f, 1f), string.Format("Extraction Point ({0})", num), color, settings.f_EspRange, false);
+							}
+						}
+						catch (Exception ex)
+						{
+							Log.LogError("RenderExternalESP - Extraction Failed: " + ex.ToString());
+						}
+					}
+				}
+
+				if (settings.b_truckESP && LevelGenerator.Instance != null)
+				{
+					try
+					{
+						var levelPathTruck = LevelGenerator.Instance.LevelPathTruck;
+						if (levelPathTruck)
+						{
+							Color orange = new Color(1f, 0.5f, 0f, 1f);
+							AddEspElement(espData, cam, levelPathTruck.transform.position, (2f, 2f), "Truck", orange, settings.f_EspRange, false);
+						}
+					}
+					catch (Exception ex)
+					{
+						Log.LogError("RenderExternalESP - Truck Failed: " + ex.ToString());
+					}
+				}
+
+				// Render Laser (gun laser sight)
+				if (settings.b_LaserESP && !SemiFunc.RunIsLobby())
+				{
+					foreach (PhysGrabObject physGrabObject in MonoHelper.CatchedPhysGrabObjects)
+					{
+						try
+						{
+							if (physGrabObject == null || !physGrabObject.grabbedLocal || !physGrabObject.GetField<bool>("isActive")) continue;
+
+							bool isGun = physGrabObject.GetField<bool>("isGun");
+							if (isGun)
+							{
+								ItemGun itemGun = physGrabObject.GetComponent<ItemGun>();
+								if (itemGun != null && itemGun.gunMuzzle != null)
+								{
+									Vector3 barrelPosition = itemGun.gunMuzzle.position;
+									Vector3 barrelDirection = itemGun.gunMuzzle.forward;
+
+									float laserDistance = 100f;
+									Vector3 laserEndPoint = barrelPosition + (barrelDirection * laserDistance);
+
+									Vector3 viewportStart = cam.WorldToViewportPoint(barrelPosition);
+									Vector3 viewportEnd = cam.WorldToViewportPoint(laserEndPoint);
+
+									if (viewportStart.z > 0 && viewportEnd.z > 0)
+									{
+										Vector2 screenStart = new Vector2(viewportStart.x * Screen.width, (1 - viewportStart.y) * Screen.height);
+										Vector2 screenEnd = new Vector2(viewportEnd.x * Screen.width, (1 - viewportEnd.y) * Screen.height);
+
+										espData.Tracers.Add(new ExternalWindow.ESPLine
+										{
+											start = screenStart,
+											end = screenEnd,
+											color = Color.red
+										});
+									}
+								}
+							}
+						}
+						catch (Exception ex)
+						{
+							Log.LogError("RenderExternalESP - Laser Failed: " + ex.ToString());
+						}
+					}
+				}
+
+				// Update the external window with collected data
+				ExternalWindow.UpdateESPData(espData);
 			}
 			catch (Exception ex)
 			{
-				Log.LogError(ex);
+				Log.LogError("RenderExternalESP Failed: " + ex.ToString());
+			}
+		}
+
+		private (float width, float height) CalculateObjectBounds(PhysGrabObject physGrabObject, float distance)
+		{
+			try
+			{
+				Camera cam = Camera.main;
+				if (cam == null) return (1f, 1f);
+
+				Vector3 boundingBoxSize = physGrabObject.boundingBox;
+				Vector3 cameraToObject = (physGrabObject.centerPoint - cam.transform.position).normalized;
+				Vector3 objectRight = physGrabObject.transform.right;
+				Vector3 objectForward = physGrabObject.transform.forward;
+
+				float rightDot = Mathf.Abs(Vector3.Dot(cameraToObject, objectRight));
+				float forwardDot = Mathf.Abs(Vector3.Dot(cameraToObject, objectForward));
+
+				float width = (rightDot < forwardDot) ? boundingBoxSize.x : boundingBoxSize.z;
+				float height = boundingBoxSize.y;
+
+				float distanceScale = Mathf.Clamp(10f / distance, 1f, 10f);
+
+				return (width * distanceScale, height * distanceScale);
+			}
+			catch
+			{
+				return (1f, 1f);
+			}
+		}
+
+		private void AddEspElement(ExternalWindow.ESPRenderData espData, Camera cam, Vector3 worldPos, (float x, float y) size, string name, Color color, float range, bool tracer)
+		{
+			Vector3 viewportPos = cam.WorldToViewportPoint(worldPos);
+			float distance = Vector3.Distance(worldPos, cam.transform.parent.position);
+
+			if (viewportPos.z < 0 || distance > range) return;
+
+			Vector2 screenPos = new Vector2(
+				viewportPos.x * Screen.width,
+				(1 - viewportPos.y) * Screen.height
+			);
+
+			float baseBoxSize = Mathf.Clamp(1000f / distance, 10f, 50f);
+			float boxWidth = baseBoxSize * size.x;
+			float boxHeight = baseBoxSize * size.y;
+
+			bool isInView = viewportPos.x >= 0 && viewportPos.x <= 1 && viewportPos.y >= 0 && viewportPos.y <= 1;
+
+			if (isInView)
+			{
+				Vector2 boxTopLeft = new Vector2(
+					screenPos.x - (boxWidth * 0.5f),
+					screenPos.y - (boxHeight * 0.5f)
+				);
+				Vector2 boxBottomRight = new Vector2(
+					screenPos.x + (boxWidth * 0.5f),
+					screenPos.y + (boxHeight * 0.5f)
+				);
+
+				espData.Boxes.Add(new ExternalWindow.ESPBox
+				{
+					topLeft = boxTopLeft,
+					bottomRight = boxBottomRight,
+					color = color
+				});
+
+				if (!string.IsNullOrEmpty(name))
+				{
+					Vector2 labelPos = new Vector2(
+						screenPos.x,
+						screenPos.y - (boxHeight * 0.5f) - 20f
+					);
+
+					espData.Items.Add(new ExternalWindow.ESPItem
+					{
+						screenPos = labelPos,
+						label = name,
+						color = Color.white
+					});
+				}
+
+				if (tracer)
+				{
+					Vector2 screenCenter = new Vector2(Screen.width / 2f, Screen.height / 2f);
+					espData.Tracers.Add(new ExternalWindow.ESPLine
+					{
+						start = screenCenter,
+						end = screenPos,
+						color = color
+					});
+				}
 			}
 		}
 
