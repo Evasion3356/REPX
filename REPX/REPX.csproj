@@ -142,7 +142,39 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="**\*.cs" />
+    <Compile Include="CheatGUI.cs" />
+    <Compile Include="Cheats\EspCheat.cs" />
+    <Compile Include="Data\Settings.cs" />
+    <Compile Include="Data\SettingsData.cs" />
+    <Compile Include="Extensions\MiscExtension.cs" />
+    <Compile Include="Extensions\PlayerAvatarExtension.cs" />
+    <Compile Include="Extensions\ReflectExtension.cs" />
+    <Compile Include="ExternalRender.cs" />
+    <Compile Include="ExternalWindow.cs" />
+    <Compile Include="Helpers\Log.cs" />
+    <Compile Include="Helpers\MonoHelper.cs" />
+    <Compile Include="Helpers\RepoUtils.cs" />
+    <Compile Include="Loader.cs" />
+    <Compile Include="Microsoft\CodeAnalysis\EmbeddedAttribute.cs" />
+    <Compile Include="Modules\ExtendedPlayerData.cs" />
+    <Compile Include="Modules\ExtendedPlayerDataExtension.cs" />
+    <Compile Include="Patches\Game\Player\PhysGrabObjectImpactDetectorPatch.cs" />
+    <Compile Include="Patches\Game\Player\PhysGrabObjectPatch.cs" />
+    <Compile Include="Patches\Game\Player\PlayerAvatarPatch.cs" />
+    <Compile Include="Patches\Game\Player\PlayerControllerPatch.cs" />
+    <Compile Include="Patches\Game\Player\PlayerHealthPatch.cs" />
+    <Compile Include="Patches\Game\Player\PlayerTumblePatch.cs" />
+    <Compile Include="Patches\Game\Player\PlayerVisionTargetPatch.cs" />
+    <Compile Include="Patches\Game\Player\PlayerVoiceChatPatch.cs" />
+    <Compile Include="Patches\UI\CursorManagerPatch.cs" />
+    <Compile Include="Patches\UI\InputManagerPatch.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Render.cs" />
+    <Compile Include="System\Runtime\CompilerServices\NullableAttribute.cs" />
+    <Compile Include="System\Runtime\CompilerServices\NullableContextAttribute.cs" />
+    <Compile Include="System\Runtime\CompilerServices\RefSafetyRulesAttribute.cs" />
+    <Compile Include="UI.cs" />
+    <Compile Include="Utils.cs" />
     <Compile Remove="obj\**\*.AssemblyAttributes.cs" />
   </ItemGroup>
   <ItemGroup>

@@ -59,27 +59,6 @@ namespace REPX.Data
 		// Token: 0x04000046 RID: 70
 		public bool b_EnemyNameEsp;
 
-		// Token: 0x04000047 RID: 71
-		public bool b_Spoofing;
-
-		// Token: 0x04000048 RID: 72
-		public string s_SpoofedName = "Name";
-
-		// Token: 0x04000049 RID: 73
-		public string s_SpoofedSteamId = "";
-
-		// Token: 0x0400004A RID: 74
-		public bool b_FakePing;
-
-		// Token: 0x0400004B RID: 75
-		public int i_FakePingNum = 50;
-
-		// Token: 0x0400004C RID: 76
-		public int i_PlayerTriggerAction;
-
-		// Token: 0x0400004D RID: 77
-		public int i_ObjectTriggerAction;
-
 		// Token: 0x0400004E RID: 78
 		public bool b_IgnoreChat = true;
 

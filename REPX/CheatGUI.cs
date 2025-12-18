@@ -47,7 +47,7 @@ namespace REPX
 			Harmony harmony = CheatGUI.harmony;
 			if (harmony != null)
 			{
-				harmony.UnpatchAll(CheatGUI.GUID);  // Changed from UnpatchSelf()
+				harmony.UnpatchAll(CheatGUI.GUID);
 			}
 			this._settingsData = null;
 		}
@@ -60,10 +60,9 @@ namespace REPX
 
 		private void OnGUI()
 		{
-			if (Input.GetKey(KeyCode.F12) || Input.GetKey(KeyCode.RightShift)) //Screenshot check.
-			{
-				return;
-			}
+			// Collect and render ESP data for external window
+			RenderExternalESP();
+
 			bool flag = !this._initialized;
 			if (!flag)
 			{
@@ -78,16 +77,10 @@ namespace REPX
 						fontStyle = FontStyle.Bold
 					};
 				}
-				this.DrawWatermark();
 				bool flag2 = Settings.Instance != null && Settings.Instance.b_IsMenuOpen;
 				if (flag2)
 				{
 					Settings.Instance.WindowRect = GUILayout.Window(0, Settings.Instance.WindowRect, new GUI.WindowFunction(this.MenuContent), "REPX", Array.Empty<GUILayoutOption>());
-				}
-				bool flag3 = !SemiFunc.IsMainMenu() && !SemiFunc.RunIsLobbyMenu() && !LoadingUI.instance.gameObject.activeSelf;
-				if (flag3)
-				{
-					EspCheat.RenderEsp();
 				}
 			}
 		}
@@ -96,13 +89,374 @@ namespace REPX
 		{
 			this.MenuUpdate();
 			this.SelectedPlayerUpdate();
+		}
+
+		private void RenderExternalESP()
+		{
+
 			try
 			{
-				TriggerCheat.GetMonoTrigger();
+				var espData = new ExternalWindow.ESPRenderData();
+
+				if (!Settings.Instance.SettingsData.b_Esp ||
+					(/*Input.GetKey(KeyCode.F12) ||*/ Input.GetKey(KeyCode.RightShift)) ||
+					(Camera.main == null || SemiFunc.IsMainMenu() || SemiFunc.RunIsLobbyMenu() || LoadingUI.instance.gameObject.activeSelf))
+				{
+					ExternalWindow.UpdateESPData(espData);
+					return; 
+				}
+				var cam = Camera.main;
+				var settings = Settings.Instance.SettingsData;
+
+				// Render Players
+				if (settings.b_PlayerEsp && GameDirector.instance != null)
+				{
+					foreach (PlayerAvatar playerAvatar in GameDirector.instance.PlayerList)
+					{
+						try
+						{
+							if (playerAvatar.IsLocalPlayer()) continue;
+
+							Vector3 targetPosition = playerAvatar.playerAvatarVisuals.bodyTopUpTransform.position;
+							float sizeX = 1f;
+							float sizeY = 2.5f;
+							Color color = settings.c_PlayerEspColor;
+							string name = string.Empty;
+
+							if (playerAvatar.IsDead())
+							{
+								sizeY = 1f;
+								PlayerDeathHead playerDeathHead = playerAvatar.playerDeathHead;
+								if (playerDeathHead != null)
+								{
+									targetPosition = playerDeathHead.GetField<PhysGrabObject>("physGrabObject").centerPoint;
+								}
+								color = Color.magenta;
+								if (settings.b_PlayerNameEsp)
+								{
+									string playerName = playerAvatar.GetPlayerName();
+									name = playerName;
+								}
+							}
+							else
+							{
+								if (settings.b_PlayerNameEsp)
+								{
+									string playerName = playerAvatar.GetPlayerName();
+									int health = playerAvatar.playerHealth.GetField<int>("health");
+									name = string.Format("{0} {1}HP", playerName, health);
+								}
+								if (playerAvatar.GetField<bool>("isCrouching"))
+								{
+									sizeY = 1.5f;
+								}
+								else if (playerAvatar.GetField<bool>("isCrawling") || playerAvatar.GetField<bool>("isTumbling") || playerAvatar.GetField<bool>("isSliding"))
+								{
+									sizeY = 1f;
+								}
+							}
+
+							AddEspElement(espData, cam, targetPosition, (sizeX, sizeY), name, color, float.MaxValue, settings.b_Tracer);
+						}
+						catch (Exception ex)
+						{
+							Log.LogError("RenderExternalESP - Player Failed: " + ex.ToString());
+						}
+					}
+				}
+
+				// Render Enemies
+				if (settings.b_EnemyEsp && EnemyDirector.instance != null)
+				{
+					foreach (EnemyParent enemyParent in EnemyDirector.instance.enemiesSpawned)
+					{
+						try
+						{
+							if (enemyParent == null) continue;
+
+							Enemy enemy = enemyParent.GetField<Enemy>("Enemy");
+							if (enemy == null) continue;
+
+							EnemyHealth enemyHealth = enemy.GetField<EnemyHealth>("Health");
+							if (enemyHealth == null) continue;
+
+							bool isDead = enemyHealth.GetField<bool>("dead");
+							bool isSpawned = enemyParent.GetField<bool>("Spawned");
+
+							if (!isDead && isSpawned)
+							{
+								string name = string.Empty;
+								if (settings.b_EnemyNameEsp)
+								{
+									int enemyCurrentHealth = enemyHealth.GetField<int>("healthCurrent");
+									name = string.Format("{0} {1}HP", enemyParent.enemyName, enemyCurrentHealth);
+								}
+
+								AddEspElement(espData, cam, enemy.CenterTransform.position, (1f, 1f), name, settings.c_EnemyEspColor, settings.f_EspRange, settings.b_Tracer);
+							}
+						}
+						catch (Exception ex)
+						{
+							Log.LogError("RenderExternalESP - Enemy Failed: " + ex.ToString());
+						}
+					}
+				}
+
+				// Render Items
+				if (settings.b_ItemEsp && !SemiFunc.RunIsLobby())
+				{
+					foreach (PhysGrabObject physGrabObject in MonoHelper.CatchedPhysGrabObjects)
+					{
+						try
+						{
+							if (physGrabObject == null || !physGrabObject.GetField<bool>("isActive")) continue;
+
+							ItemAttributes itemAttributes = physGrabObject.GetComponent<ItemAttributes>();
+							float distance = Vector3.Distance(physGrabObject.centerPoint, cam.transform.parent.position);
+							var bounds = CalculateObjectBounds(physGrabObject, distance);
+
+							// Valuables
+							if (physGrabObject.GetField<bool>("isValuable"))
+							{
+								int value = (int)physGrabObject.GetComponent<ValuableObject>().GetField<float>("dollarValueCurrent");
+								Color color;
+								if (value < 5000)
+									color = settings.c_ItemEspColorLow;
+								else if (value >= 5000 && value <= 10000)
+									color = settings.c_ItemEspColorMedium;
+								else
+									color = settings.c_ItemEspColorHigh;
+
+								string drawName = settings.b_ItemValueEsp ? string.Format("${0:N0}", value) : string.Empty;
+								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, drawName, color, settings.f_EspRange, settings.b_Tracer);
+							}
+
+							// Carts
+							if (physGrabObject.GetField<bool>("isCart"))
+							{
+								PhysGrabCart cart = physGrabObject.GetComponent<PhysGrabCart>();
+								int cartValue = cart.GetField<int>("haulCurrent");
+								string itemName = itemAttributes.GetField<string>("itemName");
+								string drawName = settings.b_ItemValueEsp ? string.Format("{0} ${1:N0}", itemName, cartValue) : string.Empty;
+								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, drawName, settings.c_CartEspColor, settings.f_EspRange, settings.b_Tracer);
+							}
+
+							// Weapons (Guns & Melee)
+							bool isGun = physGrabObject.GetField<bool>("isGun");
+							bool isMelee = physGrabObject.GetField<bool>("isMelee");
+							if (isGun || isMelee)
+							{
+								string itemName = itemAttributes.GetField<string>("itemName");
+								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, itemName, settings.c_WeaponEspColor, settings.f_EspRange, settings.b_Tracer);
+							}
+
+							// Drones
+							if (physGrabObject.GetComponent<ItemDrone>())
+							{
+								string itemName = itemAttributes.GetField<string>("itemName");
+								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, itemName, settings.c_ItemEspColorDrone, settings.f_EspRange, settings.b_Tracer);
+							}
+						}
+						catch (Exception ex)
+						{
+							Log.LogError("RenderExternalESP - Item Failed: " + ex.ToString());
+						}
+					}
+				}
+
+				// Render Objects (Extraction & Truck)
+				if (settings.b_extractionESP && RoundDirector.instance != null)
+				{
+					int num = 0;
+					foreach (GameObject gameObject in RoundDirector.instance.GetField<List<GameObject>>("extractionPointList"))
+					{
+						num++;
+						try
+						{
+							if (gameObject == null) continue;
+
+							ExtractionPoint ep = gameObject.GetComponent<ExtractionPoint>();
+							if (ep != null)
+							{
+								if (ep.GetField<ExtractionPoint.State>("currentState") == ExtractionPoint.State.Complete) continue;
+
+								Color color = Color.white;
+								if (ep == RoundDirector.instance.GetField<ExtractionPoint>("extractionPointCurrent"))
+								{
+									color = Color.green;
+								}
+
+								AddEspElement(espData, cam, gameObject.transform.position, (1f, 1f), string.Format("Extraction Point ({0})", num), color, settings.f_EspRange, false);
+							}
+						}
+						catch (Exception ex)
+						{
+							Log.LogError("RenderExternalESP - Extraction Failed: " + ex.ToString());
+						}
+					}
+				}
+
+				if (settings.b_truckESP && LevelGenerator.Instance != null)
+				{
+					try
+					{
+						var levelPathTruck = LevelGenerator.Instance.LevelPathTruck;
+						if (levelPathTruck)
+						{
+							Color orange = new Color(1f, 0.5f, 0f, 1f);
+							AddEspElement(espData, cam, levelPathTruck.transform.position, (2f, 2f), "Truck", orange, settings.f_EspRange, false);
+						}
+					}
+					catch (Exception ex)
+					{
+						Log.LogError("RenderExternalESP - Truck Failed: " + ex.ToString());
+					}
+				}
+
+				// Render Laser (gun laser sight)
+				if (settings.b_LaserESP && !SemiFunc.RunIsLobby())
+				{
+					foreach (PhysGrabObject physGrabObject in MonoHelper.CatchedPhysGrabObjects)
+					{
+						try
+						{
+							if (physGrabObject == null || !physGrabObject.grabbedLocal || !physGrabObject.GetField<bool>("isActive")) continue;
+
+							bool isGun = physGrabObject.GetField<bool>("isGun");
+							if (isGun)
+							{
+								ItemGun itemGun = physGrabObject.GetComponent<ItemGun>();
+								if (itemGun != null && itemGun.gunMuzzle != null)
+								{
+									Vector3 barrelPosition = itemGun.gunMuzzle.position;
+									Vector3 barrelDirection = itemGun.gunMuzzle.forward;
+
+									float laserDistance = 100f;
+									Vector3 laserEndPoint = barrelPosition + (barrelDirection * laserDistance);
+
+									Vector3 viewportStart = cam.WorldToViewportPoint(barrelPosition);
+									Vector3 viewportEnd = cam.WorldToViewportPoint(laserEndPoint);
+
+									if (viewportStart.z > 0 && viewportEnd.z > 0)
+									{
+										Vector2 screenStart = new Vector2(viewportStart.x * Screen.width, (1 - viewportStart.y) * Screen.height);
+										Vector2 screenEnd = new Vector2(viewportEnd.x * Screen.width, (1 - viewportEnd.y) * Screen.height);
+
+										espData.Tracers.Add(new ExternalWindow.ESPLine
+										{
+											start = screenStart,
+											end = screenEnd,
+											color = Color.red
+										});
+									}
+								}
+							}
+						}
+						catch (Exception ex)
+						{
+							Log.LogError("RenderExternalESP - Laser Failed: " + ex.ToString());
+						}
+					}
+				}
+
+				// Update the external window with collected data
+				ExternalWindow.UpdateESPData(espData);
 			}
 			catch (Exception ex)
 			{
-				Log.LogError(ex);
+				Log.LogError("RenderExternalESP Failed: " + ex.ToString());
+			}
+		}
+
+		private (float width, float height) CalculateObjectBounds(PhysGrabObject physGrabObject, float distance)
+		{
+			try
+			{
+				Camera cam = Camera.main;
+				if (cam == null) return (1f, 1f);
+
+				Vector3 boundingBoxSize = physGrabObject.boundingBox;
+				Vector3 cameraToObject = (physGrabObject.centerPoint - cam.transform.position).normalized;
+				Vector3 objectRight = physGrabObject.transform.right;
+				Vector3 objectForward = physGrabObject.transform.forward;
+
+				float rightDot = Mathf.Abs(Vector3.Dot(cameraToObject, objectRight));
+				float forwardDot = Mathf.Abs(Vector3.Dot(cameraToObject, objectForward));
+
+				float width = (rightDot < forwardDot) ? boundingBoxSize.x : boundingBoxSize.z;
+				float height = boundingBoxSize.y;
+
+				float distanceScale = Mathf.Clamp(10f / distance, 1f, 10f);
+
+				return (width * distanceScale, height * distanceScale);
+			}
+			catch
+			{
+				return (1f, 1f);
+			}
+		}
+
+		private void AddEspElement(ExternalWindow.ESPRenderData espData, Camera cam, Vector3 worldPos, (float x, float y) size, string name, Color color, float range, bool tracer)
+		{
+			Vector3 viewportPos = cam.WorldToViewportPoint(worldPos);
+			float distance = Vector3.Distance(worldPos, cam.transform.parent.position);
+
+			if (viewportPos.z < 0 || distance > range) return;
+
+			Vector2 screenPos = new Vector2(
+				viewportPos.x * Screen.width,
+				(1 - viewportPos.y) * Screen.height
+			);
+
+			float baseBoxSize = Mathf.Clamp(1000f / distance, 10f, 50f);
+			float boxWidth = baseBoxSize * size.x;
+			float boxHeight = baseBoxSize * size.y;
+
+			bool isInView = viewportPos.x >= 0 && viewportPos.x <= 1 && viewportPos.y >= 0 && viewportPos.y <= 1;
+
+			if (isInView)
+			{
+				Vector2 boxTopLeft = new Vector2(
+					screenPos.x - (boxWidth * 0.5f),
+					screenPos.y - (boxHeight * 0.5f)
+				);
+				Vector2 boxBottomRight = new Vector2(
+					screenPos.x + (boxWidth * 0.5f),
+					screenPos.y + (boxHeight * 0.5f)
+				);
+
+				espData.Boxes.Add(new ExternalWindow.ESPBox
+				{
+					topLeft = boxTopLeft,
+					bottomRight = boxBottomRight,
+					color = color
+				});
+
+				if (!string.IsNullOrEmpty(name))
+				{
+					Vector2 labelPos = new Vector2(
+						screenPos.x,
+						screenPos.y - (boxHeight * 0.5f) - 20f
+					);
+
+					espData.Items.Add(new ExternalWindow.ESPItem
+					{
+						screenPos = labelPos,
+						label = name,
+						color = color
+					});
+				}
+
+				if (tracer)
+				{
+					Vector2 screenCenter = new Vector2(Screen.width / 2f, Screen.height / 2f);
+					espData.Tracers.Add(new ExternalWindow.ESPLine
+					{
+						start = screenCenter,
+						end = screenPos,
+						color = color
+					});
+				}
 			}
 		}
 
@@ -229,12 +583,6 @@ namespace REPX
 					UI.Tab<UI.Tabs>("Level", ref UI.nTab, UI.Tabs.Level, false);
 				}
 				UI.Tab<UI.Tabs>("Misc", ref UI.nTab, UI.Tabs.Misc, false);
-				bool flag4 = !SemiFunc.IsMainMenu();
-				if (flag4)
-				{
-					UI.Tab<UI.Tabs>("Trolling", ref UI.nTab, UI.Tabs.Trolling, false);
-				}
-				UI.Tab<UI.Tabs>("Trigger Cheats", ref UI.nTab, UI.Tabs.TriggerCheat, false);
 				UI.Tab<UI.Tabs>("Settings", ref UI.nTab, UI.Tabs.Settings, false);
 				GUILayout.EndHorizontal();
 				this._menuScrollPos = GUILayout.BeginScrollView(this._menuScrollPos, Array.Empty<GUILayoutOption>());
@@ -279,22 +627,6 @@ namespace REPX
 					case UI.Tabs.Misc:
 						this.DrawMiscTab();
 						break;
-					case UI.Tabs.Trolling:
-						{
-							bool flag7 = SemiFunc.IsMainMenu();
-							if (flag7)
-							{
-								UI.nTab = UI.Tabs.About;
-							}
-							else
-							{
-								this.DrawTrollingTab();
-							}
-							break;
-						}
-					case UI.Tabs.TriggerCheat:
-						this.DrawTriggerCheatTab();
-						break;
 					case UI.Tabs.Settings:
 						this.DrawSettingsTab();
 						break;
@@ -312,7 +644,7 @@ namespace REPX
 		private void DrawAboutTab()
 		{
 			string text = "Welcome to REPX v" + CheatGUI.version + " by DiegoTheWise & gir489\n\nFeatures:\nInformation Spoofing\nESP\nMisc Cheats\nSavable Config\nAnd more!";
-			string text2 = "\n\nChange Log:\nAdded: Level Tab.\nAdded: All Players option in Players Tab.\nAdded: Force Name in Players Tab.\nAdded: Force Message in Players Tab.\nAdded: Shake Screen in Players Tab.\nAdded: Fake Lag in Players Tab.\nAdded: Disable Player in Players Tab.\nAdded: Kick Player in Players Tab.\nAdded: Softlock Game in Trolling Tab.\nAnd much more!\n\nv1.1.1:\nUpdated for v0.3.2 of RE.P.O by gir489.";
+			string text2 = "\n\nChange Log:\nAdded: Level Tab.\nAdded: All Players option in Players Tab.\nAdded: Force Name in Players Tab.\nAdded: Force Message in Players Tab.\nAdded: Shake Screen in Players Tab.\nAdded: Fake Lag in Players Tab.\nAdded: Disable Player in Players Tab.\nAdded: Kick Player in Players Tab.\nAdded: Softlock Game in Trolling Tab.\nAnd much more!\n\nv1.1.1:\nUpdated for v0.3.2 of RE.P.O by gir489.\n\nv1.1.2:\nAdded stream-proof ESP.";
 			GUILayout.Label(text + text2, GUI.skin.textArea, new GUILayoutOption[] { GUILayout.ExpandHeight(true) });
 		}
 
@@ -414,14 +746,6 @@ namespace REPX
 						}
 					}
 				});
-			}
-			else
-			{
-				UI.Header("Trolling");
-				UI.Checkbox(ref this._shakeScreen, "Shake Screen", "Rapidly shakes the selected player screen.");
-				this.DrawKillButton(selectedPlayers);
-				UI.Header("Destructive");
-				this.DrawSoftlockButton(selectedPlayers);
 			}
 
 			if (SemiFunc.IsMultiplayer())
@@ -682,101 +1006,6 @@ namespace REPX
 						PhotonNetwork.NetworkingClient.State = ClientState.Leaving;
 					});
 				}
-				UI.Checkbox(ref this._settingsData.b_Spoofing, "Spoofing", "Enable identity spoofing features.");
-				bool b_Spoofing = this._settingsData.b_Spoofing;
-				if (b_Spoofing)
-				{
-					UI.TextBox(ref this._settingsData.s_SpoofedName, "Spoofed Name", "Enter the name you want to appear as.", 200, 0);
-					UI.TextBox(ref this._settingsData.s_SpoofedSteamId, "Spoofed Steam Id", "Enter the Steam ID you want to appear as.", 200, 0);
-				}
-				UI.Checkbox(ref this._settingsData.b_FakePing, "Fake Ping", "Makes it where you have a fixed ping amount displayed.");
-				bool b_FakePing = this._settingsData.b_FakePing;
-				if (b_FakePing)
-				{
-					UI.Slider(ref this._settingsData.i_FakePingNum, 0, 100000, "Fake Ping Amount", "The fixed ping amount to use.");
-				}
-			}
-		}
-
-		private void DrawTrollingTab()
-		{
-			bool flag = this._settingsData != null;
-			if (flag)
-			{
-				bool flag2 = !GameDirector.instance.GetField<bool>("outroStart");
-				if (flag2)
-				{
-					UI.Button("Softlock Game", "Soft locks the game by forcing outro state.", () =>
-					{
-						foreach (PlayerAvatar playerAvatar in GameDirector.instance.PlayerList)
-						{
-							playerAvatar.OutroExploit();
-						}
-					});
-				}
-				bool flag3 = !SemiFunc.RunIsLobbyMenu();
-				if (flag3)
-				{
-					UI.Button("Teleport All To Void", "Teleports all players to the Void.", () =>
-					{
-						foreach (PlayerAvatar playerAvatar in GameDirector.instance.PlayerList)
-						{
-							playerAvatar.TeleportExploit(new Vector3(0f, -1000f, 0f), null, 0);
-						}
-					});
-
-					UI.Button("Teleport All To Spawn", "Teleports all players to the Spawn Room.", () =>
-					{
-						foreach (PlayerAvatar playerAvatar in GameDirector.instance.PlayerList)
-						{
-							// Get the first GameObject from StartRooms list
-							GameObject firstRoom = LevelGenerator.Instance.Level.StartRooms[0].Prefab;
-							Vector3 position = firstRoom.transform.position;
-							playerAvatar.TeleportExploit(position, null, 0);
-						}
-					});
-
-					UI.Button("Despawn All Valuables", "Despawns all valuables.", () =>
-					{
-						foreach (PhysGrabObject physGrabObject in MonoHelper.CatchedPhysGrabObjects)
-						{
-							if (physGrabObject != null && physGrabObject.GetField<bool>("isValuable"))
-							{
-								physGrabObject.Despawn();
-							}
-						}
-					});
-
-					UI.Button("Despawn All Objects", "Despawns all objects.", () =>
-					{
-						foreach (PhysGrabObject physGrabObject in MonoHelper.CatchedPhysGrabObjects)
-						{
-							if (physGrabObject != null)
-							{
-								physGrabObject.Despawn();
-							}
-						}
-					});
-				}
-			}
-		}
-
-		private void DrawTriggerCheatTab()
-		{
-			bool flag = this._settingsData != null;
-			if (flag)
-			{
-				GUIStyle guistyle = new GUIStyle(GUI.skin.box)
-				{
-					wordWrap = true,
-					alignment = TextAnchor.UpperLeft,
-					padding = new RectOffset(8, 8, 8, 8),
-					margin = new RectOffset(0, 0, 5, 10)
-				};
-				string text = "Custom actions that are done when the middle Mouse button is clicked while facing a valid object.";
-				GUILayout.Box(text, guistyle, new GUILayoutOption[] { GUILayout.ExpandWidth(true) });
-				UI.Dropdown(ref this._settingsData.i_PlayerTriggerAction, "On Player Trigger", this._playerTriggerActions, "Action taken when player is clicked on by trigger cheat");
-				UI.Dropdown(ref this._settingsData.i_ObjectTriggerAction, "On Object Trigger", this._objectTriggerActions, "Action taken when object is clicked on by trigger cheat");
 			}
 		}
 
@@ -815,7 +1044,7 @@ namespace REPX
 		}
 
 		internal static readonly string GUID = "com.repx.loader";
-		internal static readonly string version = "1.1.1";
+		internal static readonly string version = "1.1.2";
 		internal static Harmony harmony;
 		private GUIStyle _style;
 		private SettingsData _settingsData;
@@ -825,7 +1054,6 @@ namespace REPX
 		private Vector2 _menuScrollPos;
 		private int _playerSel = 0;
 		private float _dhAmount = 25f;
-		private bool _shakeScreen;
 		private string _forcePlayerName = string.Empty;
 		private bool _hideMessage;
 		private string _chatMessage = string.Empty;

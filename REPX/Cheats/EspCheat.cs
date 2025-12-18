@@ -463,6 +463,69 @@ namespace REPX.Cheats
 			}
 		}
 
+		public static void RenderEspElementExternal(Vector3 worldPos, (float x, float y) size, string name, Color color, float Range = float.MaxValue, bool tracer = false)
+		{
+			var cam = Camera.main;
+			Vector3 viewportPos = cam.WorldToViewportPoint(worldPos);
+
+			float distance = Mathf.Round(Vector3.Distance(worldPos, cam.transform.parent.position));
+			if (viewportPos.z < 0 || distance > Range) return;
+
+			Vector2 screenPos = new Vector2(
+				viewportPos.x * Screen.width,
+				(1 - viewportPos.y) * Screen.height
+			);
+
+			// Base box size (scales with distance)
+			float baseBoxSize = Mathf.Clamp(1000f / distance, 10f, 50f);
+
+			// Apply size multiplier (e.g., for width/height adjustments)
+			float boxWidth = baseBoxSize * size.x;
+			float boxHeight = baseBoxSize * size.y;
+
+			bool isInView = viewportPos.x >= 0 && viewportPos.x <= 1 && viewportPos.y >= 0 && viewportPos.y <= 1;
+
+			if (isInView)
+			{
+				// Calculate the top-left corner to keep the box centered on screenPos
+				Vector2 boxTopLeft = new Vector2(
+					screenPos.x - (boxWidth * 0.5f),  // Center horizontally
+					screenPos.y - (boxHeight * 0.5f)  // Center vertically
+				);
+
+				// Draw the box
+				ExternalRender.Box(
+					boxTopLeft,
+					new Vector2(boxWidth, boxHeight),
+					2f,
+					color
+				);
+
+				// Draw the name label (above the box)
+				if (!string.IsNullOrEmpty(name))
+				{
+					ExternalRender.String(
+						screenPos.x,  // Centered horizontally
+						screenPos.y - (boxHeight * 0.5f) - 20f,  // Place above the box
+						200f, 20f,
+						name,
+						Color.white,
+						true
+					);
+				}
+			}
+
+			if (tracer)
+			{
+				Vector2 screenCenter = new Vector2(Screen.width / 2f, Screen.height / 2f);
+				Vector2 tracerEndPos = isInView ? screenPos : new Vector2(
+					Mathf.Clamp(viewportPos.x * Screen.width, 0, Screen.width),
+					Mathf.Clamp((1 - viewportPos.y) * Screen.height, 0, Screen.height)
+				);
+				Render.Line(screenCenter, tracerEndPos, 1f, color);
+			}
+		}
+
 		private static Vector2 WorldToScreenPoint(Vector3 worldPos, Matrix4x4 matrix)
 		{
 			Vector4 vector = matrix * new Vector4(worldPos.x, worldPos.y, worldPos.z, 1f);
