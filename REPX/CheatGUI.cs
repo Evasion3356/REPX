@@ -451,7 +451,7 @@ namespace REPX
 					{
 						screenPos = labelPos,
 						label = name,
-						color = Color.white
+						color = color
 					});
 				}
 
