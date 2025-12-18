@@ -20,21 +20,6 @@ namespace REPX.Patches.Game.Player
 			__instance.gameObject.AddComponent<ExtendedPlayerData>();
 		}
 
-		[HarmonyPatch("FixedUpdate")]
-		[HarmonyPostfix]
-		private static void FixedUpdate_Postfix(PlayerAvatar __instance)
-		{	
-			bool flag = __instance.IsLocalPlayer();
-			if (flag)
-			{
-				bool b_FakePing = Settings.Instance.SettingsData.b_FakePing;
-				if (b_FakePing)
-				{
-					__instance.SetField("playerPing", Settings.Instance.SettingsData.i_FakePingNum);
-				}
-			}
-		}
-
 		[HarmonyPatch("PlayerDeath")]
 		[HarmonyPrefix]
 		private static bool PlayerDeath_Prefix(PlayerAvatar __instance, int enemyIndex)

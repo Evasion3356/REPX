@@ -529,7 +529,7 @@ namespace REPX
 
 		internal enum Tabs
 		{
-			About, ESP, Self, Players, Level, Misc, Trolling, TriggerCheat, Settings
+			About, ESP, Self, Players, Level, Misc, Settings
 		}
 
 		private class DropdownState

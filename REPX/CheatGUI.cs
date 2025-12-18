@@ -60,22 +60,8 @@ namespace REPX
 
 		private void OnGUI()
 		{
-			if (Input.GetKey(KeyCode.F12) || Input.GetKey(KeyCode.RightShift))
-			{
-				return;
-			}
-
 			// Collect and render ESP data for external window
 			RenderExternalESP();
-
-			try
-			{
-				TriggerCheat.GetMonoTrigger();
-			}
-			catch (Exception ex)
-			{
-				Log.LogError(ex);
-			}
 
 			bool flag = !this._initialized;
 			if (!flag)
@@ -107,12 +93,18 @@ namespace REPX
 
 		private void RenderExternalESP()
 		{
-			if (!Settings.Instance.SettingsData.b_Esp) return;
-			if (Camera.main == null || SemiFunc.IsMainMenu() || SemiFunc.RunIsLobbyMenu() || LoadingUI.instance.gameObject.activeSelf) return;
 
 			try
 			{
 				var espData = new ExternalWindow.ESPRenderData();
+
+				if (!Settings.Instance.SettingsData.b_Esp ||
+					(/*Input.GetKey(KeyCode.F12) ||*/ Input.GetKey(KeyCode.RightShift)) ||
+					(Camera.main == null || SemiFunc.IsMainMenu() || SemiFunc.RunIsLobbyMenu() || LoadingUI.instance.gameObject.activeSelf))
+				{
+					ExternalWindow.UpdateESPData(espData);
+					return; 
+				}
 				var cam = Camera.main;
 				var settings = Settings.Instance.SettingsData;
 
@@ -591,12 +583,6 @@ namespace REPX
 					UI.Tab<UI.Tabs>("Level", ref UI.nTab, UI.Tabs.Level, false);
 				}
 				UI.Tab<UI.Tabs>("Misc", ref UI.nTab, UI.Tabs.Misc, false);
-				bool flag4 = !SemiFunc.IsMainMenu();
-				if (flag4)
-				{
-					UI.Tab<UI.Tabs>("Trolling", ref UI.nTab, UI.Tabs.Trolling, false);
-				}
-				UI.Tab<UI.Tabs>("Trigger Cheats", ref UI.nTab, UI.Tabs.TriggerCheat, false);
 				UI.Tab<UI.Tabs>("Settings", ref UI.nTab, UI.Tabs.Settings, false);
 				GUILayout.EndHorizontal();
 				this._menuScrollPos = GUILayout.BeginScrollView(this._menuScrollPos, Array.Empty<GUILayoutOption>());
@@ -641,22 +627,6 @@ namespace REPX
 					case UI.Tabs.Misc:
 						this.DrawMiscTab();
 						break;
-					case UI.Tabs.Trolling:
-						{
-							bool flag7 = SemiFunc.IsMainMenu();
-							if (flag7)
-							{
-								UI.nTab = UI.Tabs.About;
-							}
-							else
-							{
-								this.DrawTrollingTab();
-							}
-							break;
-						}
-					case UI.Tabs.TriggerCheat:
-						this.DrawTriggerCheatTab();
-						break;
 					case UI.Tabs.Settings:
 						this.DrawSettingsTab();
 						break;
@@ -674,7 +644,7 @@ namespace REPX
 		private void DrawAboutTab()
 		{
 			string text = "Welcome to REPX v" + CheatGUI.version + " by DiegoTheWise & gir489\n\nFeatures:\nInformation Spoofing\nESP\nMisc Cheats\nSavable Config\nAnd more!";
-			string text2 = "\n\nChange Log:\nAdded: Level Tab.\nAdded: All Players option in Players Tab.\nAdded: Force Name in Players Tab.\nAdded: Force Message in Players Tab.\nAdded: Shake Screen in Players Tab.\nAdded: Fake Lag in Players Tab.\nAdded: Disable Player in Players Tab.\nAdded: Kick Player in Players Tab.\nAdded: Softlock Game in Trolling Tab.\nAnd much more!\n\nv1.1.1:\nUpdated for v0.3.2 of RE.P.O by gir489.";
+			string text2 = "\n\nChange Log:\nAdded: Level Tab.\nAdded: All Players option in Players Tab.\nAdded: Force Name in Players Tab.\nAdded: Force Message in Players Tab.\nAdded: Shake Screen in Players Tab.\nAdded: Fake Lag in Players Tab.\nAdded: Disable Player in Players Tab.\nAdded: Kick Player in Players Tab.\nAdded: Softlock Game in Trolling Tab.\nAnd much more!\n\nv1.1.1:\nUpdated for v0.3.2 of RE.P.O by gir489.\n\nv1.1.2:\nAdded stream-proof ESP.";
 			GUILayout.Label(text + text2, GUI.skin.textArea, new GUILayoutOption[] { GUILayout.ExpandHeight(true) });
 		}
 
@@ -776,14 +746,6 @@ namespace REPX
 						}
 					}
 				});
-			}
-			else
-			{
-				UI.Header("Trolling");
-				UI.Checkbox(ref this._shakeScreen, "Shake Screen", "Rapidly shakes the selected player screen.");
-				this.DrawKillButton(selectedPlayers);
-				UI.Header("Destructive");
-				this.DrawSoftlockButton(selectedPlayers);
 			}
 
 			if (SemiFunc.IsMultiplayer())
@@ -1044,101 +1006,6 @@ namespace REPX
 						PhotonNetwork.NetworkingClient.State = ClientState.Leaving;
 					});
 				}
-				UI.Checkbox(ref this._settingsData.b_Spoofing, "Spoofing", "Enable identity spoofing features.");
-				bool b_Spoofing = this._settingsData.b_Spoofing;
-				if (b_Spoofing)
-				{
-					UI.TextBox(ref this._settingsData.s_SpoofedName, "Spoofed Name", "Enter the name you want to appear as.", 200, 0);
-					UI.TextBox(ref this._settingsData.s_SpoofedSteamId, "Spoofed Steam Id", "Enter the Steam ID you want to appear as.", 200, 0);
-				}
-				UI.Checkbox(ref this._settingsData.b_FakePing, "Fake Ping", "Makes it where you have a fixed ping amount displayed.");
-				bool b_FakePing = this._settingsData.b_FakePing;
-				if (b_FakePing)
-				{
-					UI.Slider(ref this._settingsData.i_FakePingNum, 0, 100000, "Fake Ping Amount", "The fixed ping amount to use.");
-				}
-			}
-		}
-
-		private void DrawTrollingTab()
-		{
-			bool flag = this._settingsData != null;
-			if (flag)
-			{
-				bool flag2 = !GameDirector.instance.GetField<bool>("outroStart");
-				if (flag2)
-				{
-					UI.Button("Softlock Game", "Soft locks the game by forcing outro state.", () =>
-					{
-						foreach (PlayerAvatar playerAvatar in GameDirector.instance.PlayerList)
-						{
-							playerAvatar.OutroExploit();
-						}
-					});
-				}
-				bool flag3 = !SemiFunc.RunIsLobbyMenu();
-				if (flag3)
-				{
-					UI.Button("Teleport All To Void", "Teleports all players to the Void.", () =>
-					{
-						foreach (PlayerAvatar playerAvatar in GameDirector.instance.PlayerList)
-						{
-							playerAvatar.TeleportExploit(new Vector3(0f, -1000f, 0f), null, 0);
-						}
-					});
-
-					UI.Button("Teleport All To Spawn", "Teleports all players to the Spawn Room.", () =>
-					{
-						foreach (PlayerAvatar playerAvatar in GameDirector.instance.PlayerList)
-						{
-							// Get the first GameObject from StartRooms list
-							GameObject firstRoom = LevelGenerator.Instance.Level.StartRooms[0].Prefab;
-							Vector3 position = firstRoom.transform.position;
-							playerAvatar.TeleportExploit(position, null, 0);
-						}
-					});
-
-					UI.Button("Despawn All Valuables", "Despawns all valuables.", () =>
-					{
-						foreach (PhysGrabObject physGrabObject in MonoHelper.CatchedPhysGrabObjects)
-						{
-							if (physGrabObject != null && physGrabObject.GetField<bool>("isValuable"))
-							{
-								physGrabObject.Despawn();
-							}
-						}
-					});
-
-					UI.Button("Despawn All Objects", "Despawns all objects.", () =>
-					{
-						foreach (PhysGrabObject physGrabObject in MonoHelper.CatchedPhysGrabObjects)
-						{
-							if (physGrabObject != null)
-							{
-								physGrabObject.Despawn();
-							}
-						}
-					});
-				}
-			}
-		}
-
-		private void DrawTriggerCheatTab()
-		{
-			bool flag = this._settingsData != null;
-			if (flag)
-			{
-				GUIStyle guistyle = new GUIStyle(GUI.skin.box)
-				{
-					wordWrap = true,
-					alignment = TextAnchor.UpperLeft,
-					padding = new RectOffset(8, 8, 8, 8),
-					margin = new RectOffset(0, 0, 5, 10)
-				};
-				string text = "Custom actions that are done when the middle Mouse button is clicked while facing a valid object.";
-				GUILayout.Box(text, guistyle, new GUILayoutOption[] { GUILayout.ExpandWidth(true) });
-				UI.Dropdown(ref this._settingsData.i_PlayerTriggerAction, "On Player Trigger", this._playerTriggerActions, "Action taken when player is clicked on by trigger cheat");
-				UI.Dropdown(ref this._settingsData.i_ObjectTriggerAction, "On Object Trigger", this._objectTriggerActions, "Action taken when object is clicked on by trigger cheat");
 			}
 		}
 
@@ -1177,7 +1044,7 @@ namespace REPX
 		}
 
 		internal static readonly string GUID = "com.repx.loader";
-		internal static readonly string version = "1.1.1";
+		internal static readonly string version = "1.1.2";
 		internal static Harmony harmony;
 		private GUIStyle _style;
 		private SettingsData _settingsData;
@@ -1187,7 +1054,6 @@ namespace REPX
 		private Vector2 _menuScrollPos;
 		private int _playerSel = 0;
 		private float _dhAmount = 25f;
-		private bool _shakeScreen;
 		private string _forcePlayerName = string.Empty;
 		private bool _hideMessage;
 		private string _chatMessage = string.Empty;
