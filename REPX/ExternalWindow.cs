@@ -13,12 +13,12 @@ namespace REPX
 		private const int WS_EX_LAYERED = 0x00080000;
 		private const int WS_EX_TRANSPARENT = 0x00000020;
 		private const int WS_EX_TOPMOST = 0x00000008;
+		private const int WS_EX_TOOLWINDOW = 0x00000080; // Hides from ALT+TAB and taskbar
+		private const int WS_EX_NOACTIVATE = 0x08000000; // Prevents window activation
 		private const int WS_POPUP = unchecked((int)0x80000000);
 		private const int WS_VISIBLE = 0x10000000;
-		private const int CW_USEDEFAULT = unchecked((int)0x80000000);
 		private const int WM_PAINT = 0x000F;
 		private const int WM_DESTROY = 0x0002;
-		private const uint WM_TIMER = 0x0113;
 		private const int WM_ERASEBKGND = 0x0014;
 		private const uint WM_USER = 0x0400;
 		private const uint WM_USER_INVALIDATE = WM_USER + 1;
@@ -55,6 +55,13 @@ namespace REPX
 		public struct RECT
 		{
 			public int left, top, right, bottom;
+			
+			// Helper method to check equality without allocations
+			public bool Equals(ref RECT other)
+			{
+				return left == other.left && top == other.top && 
+				       right == other.right && bottom == other.bottom;
+			}
 		}
 
 		[StructLayout(LayoutKind.Sequential)]
@@ -245,34 +252,33 @@ namespace REPX
 		// Rendering callback - called from external window thread
 		internal static Action<IntPtr> OnRender;
 
-		// Thread-safe ESP data cache
-		internal class ESPRenderData
+		// Thread-safe ESP data cache - optimized structure
+		internal sealed class ESPRenderData
 		{
-			public List<ESPItem> Items = new List<ESPItem>();
-			public List<ESPPlayer> Players = new List<ESPPlayer>();
-			public List<ESPEnemy> Enemies = new List<ESPEnemy>();
-			public List<ESPLine> Tracers = new List<ESPLine>();
-			public List<ESPBox> Boxes = new List<ESPBox>();
+			public readonly List<ESPItem> Items;
+			public readonly List<ESPLine> Tracers;
+			public readonly List<ESPBox> Boxes;
+			
+			public ESPRenderData()
+			{
+				// Pre-allocate with reasonable capacity to reduce reallocations
+				Items = new List<ESPItem>(128);
+				Tracers = new List<ESPLine>(64);
+				Boxes = new List<ESPBox>(128);
+			}
+			
+			public void Clear()
+			{
+				Items.Clear();
+				Tracers.Clear();
+				Boxes.Clear();
+			}
 		}
 
 		internal struct ESPItem
 		{
 			public Vector2 screenPos;
 			public string label;
-			public Color color;
-		}
-
-		internal struct ESPPlayer
-		{
-			public Vector2 screenPos;
-			public string name;
-			public Color color;
-		}
-
-		internal struct ESPEnemy
-		{
-			public Vector2 screenPos;
-			public string name;
 			public Color color;
 		}
 
@@ -298,6 +304,9 @@ namespace REPX
 		// Frame counter for periodic window sync
 		private static int _frameCounter = 0;
 		private const int SYNC_INTERVAL_FRAMES = 60; // Sync window position every 60 frames (~1 second at 60fps)
+
+		// Cached brush for clearing
+		private static IntPtr _clearBrush = IntPtr.Zero;
 
 		// Called from Unity's Update() thread - triggers repaint
 		internal static void TriggerRepaint()
@@ -332,7 +341,11 @@ namespace REPX
 			{
 				if (_dataReady)
 				{
+					// Swap references instead of copying data
+					ESPRenderData temp = _currentRenderData;
 					_currentRenderData = _nextRenderData;
+					_nextRenderData = temp;
+					_nextRenderData.Clear(); // Clear for reuse
 					_dataReady = false;
 				}
 				return _currentRenderData;
@@ -368,121 +381,129 @@ namespace REPX
 			_bufferWidth = width;
 			_bufferHeight = height;
 
+			// Create cached clear brush
+			if (_clearBrush != IntPtr.Zero)
+			{
+				DeleteObject(_clearBrush);
+			}
+			_clearBrush = CreateSolidBrush(TRANSPARENCY_KEY);
+
 			// Clear buffer with transparency key
 			RECT rect;
 			rect.left = 0;
 			rect.top = 0;
 			rect.right = width;
 			rect.bottom = height;
-			IntPtr hBrush = CreateSolidBrush(TRANSPARENCY_KEY);
-			FillRect(_backBufferDC, ref rect, hBrush);
-			DeleteObject(hBrush);
+			FillRect(_backBufferDC, ref rect, _clearBrush);
 		}
 
 		private IntPtr MyWndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
 		{
-			if (msg == WM_ERASEBKGND)
+			switch (msg)
 			{
-				// Don't erase - we're using double buffering
-				return new IntPtr(1);
-			}
-			else if (msg == WM_USER_INVALIDATE)
-			{
-				// Custom message from Unity to trigger repaint
-				RedrawWindow(hWnd, IntPtr.Zero, IntPtr.Zero, RDW_INVALIDATE | RDW_INTERNALPAINT);
-				
-				// Periodically sync window position (not every frame to reduce overhead)
-				_frameCounter++;
-				if (_frameCounter >= SYNC_INTERVAL_FRAMES)
-				{
-					_frameCounter = 0;
-					SyncWithGameWindow();
-				}
-				
-				return IntPtr.Zero;
-			}
-			else if (msg == WM_PAINT)
-			{
-				bool shouldRender = false;
-				lock (_renderLock)
-				{
-					shouldRender = _shouldRender;
-					_shouldRender = false;
-				}
-
-				if (shouldRender)
-				{
-					// Only render if Unity triggered it
-					PAINTSTRUCT ps;
-					IntPtr hdc = BeginPaint(hWnd, out ps);
-
-					// Get window dimensions
-					RECT clientRect;
-					GetClientRect(hWnd, out clientRect);
-					int width = clientRect.right - clientRect.left;
-					int height = clientRect.bottom - clientRect.top;
-
-					// Initialize or resize back buffer if needed
-					if (_backBufferDC == IntPtr.Zero || _bufferWidth != width || _bufferHeight != height)
+				case WM_ERASEBKGND:
+					// Don't erase - we're using double buffering
+					return new IntPtr(1);
+					
+				case WM_USER_INVALIDATE:
+					// Custom message from Unity to trigger repaint
+					RedrawWindow(hWnd, IntPtr.Zero, IntPtr.Zero, RDW_INVALIDATE | RDW_INTERNALPAINT);
+					
+					// Periodically sync window position (not every frame to reduce overhead)
+					_frameCounter++;
+					if (_frameCounter >= SYNC_INTERVAL_FRAMES)
 					{
-						InitializeBackBuffer(width, height);
+						_frameCounter = 0;
+						SyncWithGameWindow();
+					}
+					
+					return IntPtr.Zero;
+					
+				case WM_PAINT:
+					bool shouldRender = false;
+					lock (_renderLock)
+					{
+						shouldRender = _shouldRender;
+						_shouldRender = false;
 					}
 
-					// Clear back buffer with transparency key
-					RECT bufferRect;
-					bufferRect.left = 0;
-					bufferRect.top = 0;
-					bufferRect.right = width;
-					bufferRect.bottom = height;
-					IntPtr clearBrush = CreateSolidBrush(TRANSPARENCY_KEY);
-					FillRect(_backBufferDC, ref bufferRect, clearBrush);
-					DeleteObject(clearBrush);
-
-					// Render to back buffer
-					if (OnRender != null)
+					if (shouldRender)
 					{
-						try
+						// Only render if Unity triggered it
+						PAINTSTRUCT ps;
+						IntPtr hdc = BeginPaint(hWnd, out ps);
+
+						// Get window dimensions
+						RECT clientRect;
+						GetClientRect(hWnd, out clientRect);
+						int width = clientRect.right - clientRect.left;
+						int height = clientRect.bottom - clientRect.top;
+
+						// Initialize or resize back buffer if needed
+						if (_backBufferDC == IntPtr.Zero || _bufferWidth != width || _bufferHeight != height)
 						{
-							OnRender(_backBufferDC);
+							InitializeBackBuffer(width, height);
 						}
-						catch (Exception ex)
+
+						// Clear back buffer with transparency key (using cached brush)
+						RECT bufferRect;
+						bufferRect.left = 0;
+						bufferRect.top = 0;
+						bufferRect.right = width;
+						bufferRect.bottom = height;
+						FillRect(_backBufferDC, ref bufferRect, _clearBrush);
+
+						// Render to back buffer
+						if (OnRender != null)
 						{
-							Log.LogError("Render callback error: " + ex.ToString());
+							try
+							{
+								OnRender(_backBufferDC);
+							}
+							catch (Exception ex)
+							{
+								Log.LogError("Render callback error: " + ex.ToString());
+							}
 						}
+
+						// Copy back buffer to screen (this is atomic - no flashing!)
+						BitBlt(hdc, 0, 0, width, height, _backBufferDC, 0, 0, SRCCOPY);
+
+						EndPaint(hWnd, ref ps);
+					}
+					else
+					{
+						// Validate the rect to prevent Windows from repeatedly sending WM_PAINT
+						ValidateRect(hWnd, IntPtr.Zero);
+					}
+					
+					return IntPtr.Zero;
+					
+				case WM_DESTROY:
+					// Clean up resources
+					if (_clearBrush != IntPtr.Zero)
+					{
+						DeleteObject(_clearBrush);
+						_clearBrush = IntPtr.Zero;
+					}
+					if (_backBuffer != IntPtr.Zero)
+					{
+						DeleteObject(_backBuffer);
+						_backBuffer = IntPtr.Zero;
+					}
+					if (_backBufferDC != IntPtr.Zero)
+					{
+						DeleteDC(_backBufferDC);
+						_backBufferDC = IntPtr.Zero;
 					}
 
-					// Copy back buffer to screen (this is atomic - no flashing!)
-					BitBlt(hdc, 0, 0, width, height, _backBufferDC, 0, 0, SRCCOPY);
-
-					EndPaint(hWnd, ref ps);
-				}
-				else
-				{
-					// Validate the rect to prevent Windows from repeatedly sending WM_PAINT
-					ValidateRect(hWnd, IntPtr.Zero);
-				}
-				
-				return IntPtr.Zero;
+					isRunning = false;
+					PostQuitMessage(0);
+					return IntPtr.Zero;
+					
+				default:
+					return DefWindowProc(hWnd, msg, wParam, lParam);
 			}
-			else if (msg == WM_DESTROY)
-			{
-				// Clean up back buffer
-				if (_backBuffer != IntPtr.Zero)
-				{
-					DeleteObject(_backBuffer);
-					_backBuffer = IntPtr.Zero;
-				}
-				if (_backBufferDC != IntPtr.Zero)
-				{
-					DeleteDC(_backBufferDC);
-					_backBufferDC = IntPtr.Zero;
-				}
-
-				isRunning = false;
-				PostQuitMessage(0);
-				return IntPtr.Zero;
-			}
-			return DefWindowProc(hWnd, msg, wParam, lParam);
 		}
 
 		private void SyncWithGameWindow()
@@ -493,10 +514,7 @@ namespace REPX
 				if (GetWindowRect(gameWindow, out gameRect))
 				{
 					// Only update position if it actually changed
-					if (gameRect.left != lastGameRect.left || 
-						gameRect.top != lastGameRect.top ||
-						gameRect.right != lastGameRect.right ||
-						gameRect.bottom != lastGameRect.bottom)
+					if (!lastGameRect.Equals(ref gameRect))
 					{
 						int width = gameRect.right - gameRect.left;
 						int height = gameRect.bottom - gameRect.top;
@@ -553,12 +571,13 @@ namespace REPX
 					}
 				}
 
+				// Create window with WS_EX_TOOLWINDOW and WS_EX_NOACTIVATE to hide from ALT+TAB and taskbar
 				hWnd = CreateWindowEx(
-					WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST,
+					WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
 					wc.lpszClassName, "REPX Overlay",
 					WS_POPUP | WS_VISIBLE,
 					windowX, windowY, windowWidth, windowHeight,
-					IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+					gameWindow, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero); // Set game window as parent
 
 				if (hWnd == IntPtr.Zero)
 				{
@@ -587,7 +606,7 @@ namespace REPX
 				}
 
 				isRunning = true;
-				Log.LogInfo(string.Format("External overlay window created at {0}x{1} (Unity-synced rendering with double buffering)", windowWidth, windowHeight), "Log");
+				Log.LogInfo(string.Format("External overlay window created at {0}x{1} (hidden from ALT+TAB/taskbar)", windowWidth, windowHeight), "Log");
 
 				MSG msg;
 				while (isRunning)

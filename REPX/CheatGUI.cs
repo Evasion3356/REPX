@@ -108,7 +108,7 @@ namespace REPX
 		private void RenderExternalESP()
 		{
 			if (!Settings.Instance.SettingsData.b_Esp) return;
-			if (Camera.main == null) return;
+			if (Camera.main == null || SemiFunc.IsMainMenu() || SemiFunc.RunIsLobbyMenu() || LoadingUI.instance.gameObject.activeSelf) return;
 
 			try
 			{
