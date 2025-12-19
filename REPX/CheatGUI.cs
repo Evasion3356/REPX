@@ -225,7 +225,7 @@ namespace REPX
 								else
 									color = settings.c_ItemEspColorHigh;
 
-								string drawName = settings.b_ItemValueEsp ? string.Format("${0:N0}", value) : string.Empty;
+								string drawName = settings.b_ItemValueEsp ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "${0:N0}", value) : string.Empty;
 								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, drawName, color, settings.f_EspRange, settings.b_Tracer);
 							}
 
@@ -235,7 +235,7 @@ namespace REPX
 								PhysGrabCart cart = physGrabObject.GetComponent<PhysGrabCart>();
 								int cartValue = cart.GetField<int>("haulCurrent");
 								string itemName = itemAttributes.GetField<string>("itemName");
-								string drawName = settings.b_ItemValueEsp ? string.Format("{0} ${1:N0}", itemName, cartValue) : string.Empty;
+								string drawName = settings.b_ItemValueEsp ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0} ${1:N0}", itemName, cartValue) : string.Empty;
 								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, drawName, settings.c_CartEspColor, settings.f_EspRange, settings.b_Tracer);
 							}
 
