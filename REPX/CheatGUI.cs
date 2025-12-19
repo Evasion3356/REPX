@@ -98,8 +98,7 @@ namespace REPX
 			{
 				var espData = new ExternalWindow.ESPRenderData();
 
-				if (!Settings.Instance.SettingsData.b_Esp ||
-					(/*Input.GetKey(KeyCode.F12) ||*/ Input.GetKey(KeyCode.RightShift)) ||
+				if (!Settings.Instance.SettingsData.b_Esp || Input.GetKey(KeyCode.RightShift) ||
 					(Camera.main == null || SemiFunc.IsMainMenu() || SemiFunc.RunIsLobbyMenu() || LoadingUI.instance.gameObject.activeSelf))
 				{
 					ExternalWindow.UpdateESPData(espData);
@@ -132,10 +131,9 @@ namespace REPX
 									targetPosition = playerDeathHead.GetField<PhysGrabObject>("physGrabObject").centerPoint;
 								}
 								color = Color.magenta;
-								if (settings.b_PlayerNameEsp)
+								if (Settings.Instance.SettingsData.b_PlayerNameEsp)
 								{
-									string playerName = playerAvatar.GetPlayerName();
-									name = playerName;
+									name = playerAvatar.GetPlayerName();
 								}
 							}
 							else
@@ -401,7 +399,10 @@ namespace REPX
 			Vector3 viewportPos = cam.WorldToViewportPoint(worldPos);
 			float distance = Vector3.Distance(worldPos, cam.transform.parent.position);
 
-			if (viewportPos.z < 0 || distance > range) return;
+			if (viewportPos.z < 0 || distance > range)
+			{
+				return;
+			}
 
 			Vector2 screenPos = new Vector2(
 				viewportPos.x * Screen.width,

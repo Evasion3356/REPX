@@ -227,8 +227,8 @@ namespace REPX
 		private const uint RDW_ERASE = 0x0004;
 		private const uint SRCCOPY = 0x00CC0020;
 		
-		// Color key for transparency (magenta RGB: 255, 0, 255 -> BGR: 0xFF00FF)
-		internal const uint TRANSPARENCY_KEY = 0xFF00FF;
+		// Color key for transparency (black RGB: 0, 0, 0 -> BGR: 0x000000)
+		internal const uint TRANSPARENCY_KEY = 0x000000;
 
 		// Window procedure delegate
 		private delegate IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
