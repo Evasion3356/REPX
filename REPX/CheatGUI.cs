@@ -329,8 +329,45 @@ namespace REPX
 									Vector3 barrelPosition = itemGun.gunMuzzle.position;
 									Vector3 barrelDirection = itemGun.gunMuzzle.forward;
 
-									float laserDistance = 100f;
+									float laserDistance = itemGun.gunRange; // Use actual gun range
 									Vector3 laserEndPoint = barrelPosition + (barrelDirection * laserDistance);
+
+									// Perform raycast to check if laser can hit something
+									RaycastHit hit;
+									Color laserColor = Color.red; // Default: cannot hit (red)
+
+									// Use the SAME LayerMask that the gun uses for shooting
+									int shootLayerMask = SemiFunc.LayerMaskGetVisionObstruct() + LayerMask.GetMask(new string[] { "Enemy" });
+
+									if (Physics.Raycast(barrelPosition, barrelDirection, out hit, laserDistance, shootLayerMask))
+									{
+										// Hit something - use actual hit position
+										laserEndPoint = hit.point;
+
+										// Check what we hit and color accordingly
+										if (hit.collider.gameObject.layer == LayerMask.NameToLayer("Enemy"))
+										{
+											// Hit an enemy - green
+											laserColor = Color.green;
+										}
+										else
+										{
+											// Try to check if it's an enemy by component
+											Enemy enemy = hit.collider.GetComponentInParent<Enemy>();
+											EnemyParent enemyParent = hit.collider.GetComponentInParent<EnemyParent>();
+
+											if (enemy != null || enemyParent != null)
+											{
+												// Definitely hit an enemy - green
+												laserColor = Color.green;
+											}
+											else if (hit.collider.gameObject.CompareTag("Player"))
+											{
+												// Hit a player - cyan color
+												laserColor = Color.cyan;
+											}
+										}
+									}
 
 									Vector3 viewportStart = cam.WorldToViewportPoint(barrelPosition);
 									Vector3 viewportEnd = cam.WorldToViewportPoint(laserEndPoint);
@@ -344,7 +381,7 @@ namespace REPX
 										{
 											start = screenStart,
 											end = screenEnd,
-											color = Color.red
+											color = laserColor
 										});
 									}
 								}
@@ -356,7 +393,6 @@ namespace REPX
 						}
 					}
 				}
-
 				// Update the external window with collected data
 				ExternalWindow.UpdateESPData(espData);
 			}
