@@ -337,7 +337,7 @@ namespace REPX
 									Color laserColor = Color.red; // Default: cannot hit (red)
 
 									// Use the SAME LayerMask that the gun uses for shooting
-									int shootLayerMask = SemiFunc.LayerMaskGetVisionObstruct() + LayerMask.GetMask(new string[] { "Enemy" });
+									int shootLayerMask = SemiFunc.LayerMaskGetShouldHits();
 
 									if (Physics.Raycast(barrelPosition, barrelDirection, out hit, laserDistance, shootLayerMask))
 									{
@@ -530,6 +530,13 @@ namespace REPX
 			bool flag2 = playerList.Count > 0;
 			if (flag2)
 			{
+				// Validate player selection index and reset if out of bounds
+				if (!flag && this._playerSel > playerList.Count)
+				{
+					this._playerSel = 0;
+					flag = true;
+				}
+
 				List<PlayerAvatar> list;
 				if (!flag)
 				{
@@ -539,7 +546,7 @@ namespace REPX
 				{
 					list = GameDirector.instance.PlayerList;
 				}
-				List<PlayerAvatar> list2 = list;
+				/*List<PlayerAvatar> list2 = list;
 				bool flag10 = this._spamChatMessage && this._msgTime > 0.25f;
 				if (flag10)
 				{
@@ -555,7 +562,7 @@ namespace REPX
 						this._msgTime = 0f;
 					}
 				}
-				this._msgTime += deltaTime;
+				this._msgTime += deltaTime;*/
 			}
 		}
 
@@ -601,81 +608,79 @@ namespace REPX
 
 		private void MenuContent(int windowID)
 		{
-			bool flag = this._settingsData == null || Settings.Instance == null;
-			if (!flag)
+			if (Settings.Instance?.SettingsData == null)
+				return;
+			GUI.DragWindow(new Rect(0f, 0f, Settings.Instance.WindowRect.width, 20f));
+			GUILayout.BeginHorizontal(Array.Empty<GUILayoutOption>());
+			UI.Tab<UI.Tabs>("About", ref UI.nTab, UI.Tabs.About, false);
+			UI.Tab<UI.Tabs>("ESP", ref UI.nTab, UI.Tabs.ESP, false);
+			bool flag2 = !SemiFunc.IsMainMenu();
+			if (flag2)
 			{
-				GUI.DragWindow(new Rect(0f, 0f, Settings.Instance.WindowRect.width, 20f));
-				GUILayout.BeginHorizontal(Array.Empty<GUILayoutOption>());
-				UI.Tab<UI.Tabs>("About", ref UI.nTab, UI.Tabs.About, false);
-				UI.Tab<UI.Tabs>("ESP", ref UI.nTab, UI.Tabs.ESP, false);
-				bool flag2 = !SemiFunc.IsMainMenu();
-				if (flag2)
+				bool flag3 = !SemiFunc.RunIsLobbyMenu();
+				if (flag3)
 				{
-					bool flag3 = !SemiFunc.RunIsLobbyMenu();
-					if (flag3)
-					{
-						UI.Tab<UI.Tabs>("Self", ref UI.nTab, UI.Tabs.Self, false);
-					}
-					UI.Tab<UI.Tabs>("Players", ref UI.nTab, UI.Tabs.Players, false);
-					UI.Tab<UI.Tabs>("Level", ref UI.nTab, UI.Tabs.Level, false);
+					UI.Tab<UI.Tabs>("Self", ref UI.nTab, UI.Tabs.Self, false);
 				}
-				UI.Tab<UI.Tabs>("Misc", ref UI.nTab, UI.Tabs.Misc, false);
-				UI.Tab<UI.Tabs>("Settings", ref UI.nTab, UI.Tabs.Settings, false);
-				GUILayout.EndHorizontal();
-				this._menuScrollPos = GUILayout.BeginScrollView(this._menuScrollPos, Array.Empty<GUILayoutOption>());
-				UI.Reset();
-				switch (UI.nTab)
-				{
-					case UI.Tabs.About:
-						this.DrawAboutTab();
-						break;
-					case UI.Tabs.ESP:
-						this.DrawESPTab();
-						break;
-					case UI.Tabs.Self:
-						{
-							bool flag5 = SemiFunc.IsMainMenu() || SemiFunc.RunIsLobbyMenu();
-							if (flag5)
-							{
-								UI.nTab = UI.Tabs.About;
-							}
-							else
-							{
-								this.DrawSelfTab();
-							}
-							break;
-						}
-					case UI.Tabs.Players:
-						{
-							bool flag6 = SemiFunc.IsMainMenu();
-							if (flag6)
-							{
-								UI.nTab = UI.Tabs.About;
-							}
-							else
-							{
-								this.DrawPlayersTab();
-							}
-							break;
-						}
-					case UI.Tabs.Level:
-						this.DrawLevelTab();
-						break;
-					case UI.Tabs.Misc:
-						this.DrawMiscTab();
-						break;
-					case UI.Tabs.Settings:
-						this.DrawSettingsTab();
-						break;
-				}
-				GUILayout.EndScrollView();
-				bool b_Tooltips = this._settingsData.b_Tooltips;
-				if (b_Tooltips)
-				{
-					UI.RenderTooltip();
-				}
-				GUI.DragWindow(new Rect(0f, 0f, 0f, 20f));
+				UI.Tab<UI.Tabs>("Players", ref UI.nTab, UI.Tabs.Players, false);
+				UI.Tab<UI.Tabs>("Level", ref UI.nTab, UI.Tabs.Level, false);
 			}
+			UI.Tab<UI.Tabs>("Misc", ref UI.nTab, UI.Tabs.Misc, false);
+			UI.Tab<UI.Tabs>("Settings", ref UI.nTab, UI.Tabs.Settings, false);
+			GUILayout.EndHorizontal();
+			this._menuScrollPos = GUILayout.BeginScrollView(this._menuScrollPos, Array.Empty<GUILayoutOption>());
+			UI.Reset();
+			switch (UI.nTab)
+			{
+				case UI.Tabs.About:
+					this.DrawAboutTab();
+					break;
+				case UI.Tabs.ESP:
+					this.DrawESPTab();
+					break;
+				case UI.Tabs.Self:
+					{
+						bool flag5 = SemiFunc.IsMainMenu() || SemiFunc.RunIsLobbyMenu();
+						if (flag5)
+						{
+							UI.nTab = UI.Tabs.About;
+						}
+						else
+						{
+							this.DrawSelfTab();
+						}
+						break;
+					}
+				case UI.Tabs.Players:
+					{
+						bool flag6 = SemiFunc.IsMainMenu();
+						if (flag6)
+						{
+							UI.nTab = UI.Tabs.About;
+						}
+						else
+						{
+							this.DrawPlayersTab();
+						}
+						break;
+					}
+				case UI.Tabs.Level:
+					this.DrawLevelTab();
+					break;
+				case UI.Tabs.Misc:
+					this.DrawMiscTab();
+					break;
+				case UI.Tabs.Settings:
+					this.DrawSettingsTab();
+					break;
+			}
+			GUILayout.EndScrollView();
+			bool b_Tooltips = this._settingsData.b_Tooltips;
+			if (b_Tooltips)
+			{
+				UI.RenderTooltip();
+			}
+			GUI.DragWindow(new Rect(0f, 0f, 0f, 20f));
 		}
 
 		private void DrawAboutTab()
@@ -860,8 +865,6 @@ namespace REPX
 						}
 					}
 				});
-
-				UI.Checkbox(ref this._spamChatMessage, "Spam Chat Message", "Makes the selected player spam a chat message.");
 			}
 
 			if (!isAllPlayers)
@@ -903,6 +906,24 @@ namespace REPX
 				{
 					stats.playerUpgradeRange[str] += num;
 					PunManager.instance.InvokeMethod("UpdateGrabRangeRightAway", new object[] { str, num });
+				});
+
+				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeCrouchRest, "Crouch Rest Upgrade", "Upgrade Crouch Rest", (str, num) =>
+				{
+					stats.playerUpgradeCrouchRest[str] += num;
+					PunManager.instance.InvokeMethod("UpdateCrouchRestRightAway", new object[] { str, num });
+				});
+
+				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeTumbleWings, "Tumble Wings Upgrade", "Upgrade Tumble Wings", (str, num) =>
+				{
+					stats.playerUpgradeTumbleWings[str] += num;
+					PunManager.instance.InvokeMethod("UpdateTumbleWingsRightAway", new object[] { str, num });
+				});
+
+				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeTumbleClimb, "Tumble Climb Upgrade", "Upgrade Tumble Climb", (str, num) =>
+				{
+					stats.playerUpgradeTumbleClimb[str] += num;
+					PunManager.instance.InvokeMethod("UpdateTumbleClimbRightAway", new object[] { str, num });
 				});
 			}
 		}
@@ -1086,7 +1107,6 @@ namespace REPX
 		private GUIStyle _style;
 		private SettingsData _settingsData;
 		private bool _initialized;
-		private float _msgTime = 0f;
 		private Dictionary<PlayerAvatar, Vector3> _lagLastPos = new Dictionary<PlayerAvatar, Vector3>();
 		private Vector2 _menuScrollPos;
 		private int _playerSel = 0;
@@ -1094,7 +1114,6 @@ namespace REPX
 		private string _forcePlayerName = string.Empty;
 		private bool _hideMessage;
 		private string _chatMessage = string.Empty;
-		private bool _spamChatMessage;
 		private int _newExtractionGoal;
 		private int _surplusExtractionGoal;
 		private int _extractionIndex;
