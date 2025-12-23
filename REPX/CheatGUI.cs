@@ -925,6 +925,24 @@ namespace REPX
 					stats.playerUpgradeTumbleClimb[str] += num;
 					PunManager.instance.InvokeMethod("UpdateTumbleClimbRightAway", new object[] { str, num });
 				});
+
+				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeLaunch, "Tumble Launch Upgrade", "Upgrade Tumble Launch", (str, num) =>
+				{
+					stats.playerUpgradeLaunch[str] += num;
+					PunManager.instance.InvokeMethod("UpdateTumbleLaunchRightAway", new object[] { str, num });
+				});
+
+				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeDeathHeadBattery, "Death Head Battery Upgrade", "Upgrade Death Head Battery", (str, num) =>
+				{
+					stats.playerUpgradeDeathHeadBattery[str] += num;
+					PunManager.instance.InvokeMethod("UpdateDeathHeadBatteryRightAway", new object[] { str, num });
+				});
+
+				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeMapPlayerCount, "Player Map Count Upgrade", "Upgrade Player Map Count", (str, num) =>
+				{
+					stats.playerUpgradeMapPlayerCount[str] += num;
+					PunManager.instance.InvokeMethod("UpdateMapPlayerCountRightAway", new object[] { str, num });
+				});
 			}
 		}
 
