@@ -16,6 +16,27 @@ namespace REPX
 	internal class CheatGUI : MonoBehaviour
 	{
 		internal static CheatGUI Instance { get; private set; }
+		internal static Color orange = new Color(1f, 0.6470588f, 0f, 1f);
+
+		// Cache structure for PhysGrabObject components and properties
+		private class PhysGrabObjectCache
+		{
+			public ItemAttributes itemAttributes;
+			public ValuableObject valuableObject;
+			public PhysGrabCart cart;
+			public ItemDrone drone;
+			public ItemUpgrade upgrade;
+			public ItemGun gun;
+			public bool isValuable;
+			public bool isCart;
+			public bool isGun;
+			public bool isMelee;
+			public bool isActive;
+			public int lastFrameUpdated;
+		}
+
+		private Dictionary<PhysGrabObject, PhysGrabObjectCache> _physGrabObjectCache = new Dictionary<PhysGrabObject, PhysGrabObjectCache>();
+		private int _currentFrame = 0;
 
 		private void Awake()
 		{
@@ -50,6 +71,7 @@ namespace REPX
 				harmony.UnpatchAll(CheatGUI.GUID);
 			}
 			this._settingsData = null;
+			this._physGrabObjectCache.Clear();
 		}
 
 		private void Initialize()
@@ -89,6 +111,61 @@ namespace REPX
 		{
 			this.MenuUpdate();
 			this.SelectedPlayerUpdate();
+			this._currentFrame++;
+			
+			// Clean up cache every 300 frames (~5 seconds at 60fps)
+			if (this._currentFrame % 300 == 0)
+			{
+				CleanupCache();
+			}
+		}
+
+		private void CleanupCache()
+		{
+			// Remove cached entries for objects that no longer exist or haven't been updated recently
+			var keysToRemove = new List<PhysGrabObject>();
+			foreach (var kvp in _physGrabObjectCache)
+			{
+				if (kvp.Key == null || (_currentFrame - kvp.Value.lastFrameUpdated) > 600)
+				{
+					keysToRemove.Add(kvp.Key);
+				}
+			}
+			foreach (var key in keysToRemove)
+			{
+				_physGrabObjectCache.Remove(key);
+			}
+		}
+
+		private PhysGrabObjectCache GetOrCreateCache(PhysGrabObject physGrabObject)
+		{
+			if (!_physGrabObjectCache.TryGetValue(physGrabObject, out PhysGrabObjectCache cache))
+			{
+				cache = new PhysGrabObjectCache();
+				
+				// Cache all GetComponent calls
+				cache.itemAttributes = physGrabObject.GetComponent<ItemAttributes>();
+				cache.valuableObject = physGrabObject.GetComponent<ValuableObject>();
+				cache.cart = physGrabObject.GetComponent<PhysGrabCart>();
+				cache.drone = physGrabObject.GetComponent<ItemDrone>();
+				cache.upgrade = physGrabObject.GetComponent<ItemUpgrade>();
+				cache.gun = physGrabObject.GetComponent<ItemGun>();
+				
+				// Cache boolean fields
+				cache.isValuable = physGrabObject.GetField<bool>("isValuable");
+				cache.isCart = physGrabObject.GetField<bool>("isCart");
+				cache.isGun = physGrabObject.GetField<bool>("isGun");
+				cache.isMelee = physGrabObject.GetField<bool>("isMelee");
+				
+				_physGrabObjectCache[physGrabObject] = cache;
+				Log.LogInfo($"Cached PhysGrabObject: {physGrabObject.name}");
+			}
+			
+			// Update isActive every frame (this can change frequently)
+			cache.isActive = physGrabObject.GetField<bool>("isActive");
+			cache.lastFrameUpdated = _currentFrame;
+			
+			return cache;
 		}
 
 		private void RenderExternalESP()
@@ -207,16 +284,20 @@ namespace REPX
 					{
 						try
 						{
-							if (physGrabObject == null || !physGrabObject.GetField<bool>("isActive")) continue;
+							if (physGrabObject == null) continue;
 
-							ItemAttributes itemAttributes = physGrabObject.GetComponent<ItemAttributes>();
+							// Get or create cache for this object
+							PhysGrabObjectCache cache = GetOrCreateCache(physGrabObject);
+							
+							if (!cache.isActive) continue;
+
 							float distance = Vector3.Distance(physGrabObject.centerPoint, cam.transform.parent.position);
 							var bounds = CalculateObjectBounds(physGrabObject, distance);
 
 							// Valuables
-							if (physGrabObject.GetField<bool>("isValuable"))
+							if (cache.isValuable && cache.valuableObject != null)
 							{
-								int value = (int)physGrabObject.GetComponent<ValuableObject>().GetField<float>("dollarValueCurrent");
+								int value = (int)cache.valuableObject.GetField<float>("dollarValueCurrent");
 								Color color;
 								if (value < 5000)
 									color = settings.c_ItemEspColorLow;
@@ -230,30 +311,34 @@ namespace REPX
 							}
 
 							// Carts
-							if (physGrabObject.GetField<bool>("isCart"))
+							if (cache.isCart && cache.cart != null)
 							{
-								PhysGrabCart cart = physGrabObject.GetComponent<PhysGrabCart>();
-								int cartValue = cart.GetField<int>("haulCurrent");
-								string itemName = itemAttributes.GetField<string>("itemName");
+								int cartValue = cache.cart.GetField<int>("haulCurrent");
+								string itemName = cache.itemAttributes != null ? cache.itemAttributes.GetField<string>("itemName") : string.Empty;
 								string drawName = settings.b_ItemValueEsp ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0} ${1:N0}", itemName, cartValue) : string.Empty;
 								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, drawName, settings.c_CartEspColor, settings.f_EspRange, settings.b_Tracer);
 							}
 
 							// Weapons (Guns & Melee)
-							bool isGun = physGrabObject.GetField<bool>("isGun");
-							bool isMelee = physGrabObject.GetField<bool>("isMelee");
-							if (isGun || isMelee)
+							if ((cache.isGun || cache.isMelee) && cache.itemAttributes != null)
 							{
-								string itemName = itemAttributes.GetField<string>("itemName");
+								string itemName = cache.itemAttributes.GetField<string>("itemName");
 								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, itemName, settings.c_WeaponEspColor, settings.f_EspRange, settings.b_Tracer);
 							}
 
 							// Drones
-							if (physGrabObject.GetComponent<ItemDrone>())
+							if (cache.drone != null && cache.itemAttributes != null)
 							{
-								string itemName = itemAttributes.GetField<string>("itemName");
+								string itemName = cache.itemAttributes.GetField<string>("itemName");
 								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, itemName, settings.c_ItemEspColorDrone, settings.f_EspRange, settings.b_Tracer);
 							}
+
+							// Upgrades
+							if (cache.upgrade != null && !SemiFunc.RunIsShop() && cache.itemAttributes != null)
+							{
+								string itemName = cache.itemAttributes.GetField<string>("itemName");
+								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, itemName, orange, settings.f_EspRange, settings.b_Tracer);
+							}	
 						}
 						catch (Exception ex)
 						{
@@ -301,7 +386,6 @@ namespace REPX
 						var levelPathTruck = LevelGenerator.Instance.LevelPathTruck;
 						if (levelPathTruck)
 						{
-							Color orange = new Color(1f, 0.5f, 0f, 1f);
 							AddEspElement(espData, cam, levelPathTruck.transform.position, (2f, 2f), "Truck", orange, settings.f_EspRange, false);
 						}
 					}
@@ -318,72 +402,63 @@ namespace REPX
 					{
 						try
 						{
-							if (physGrabObject == null || !physGrabObject.grabbedLocal || !physGrabObject.GetField<bool>("isActive")) continue;
+							if (physGrabObject == null || !physGrabObject.grabbedLocal) continue;
 
-							bool isGun = physGrabObject.GetField<bool>("isGun");
-							if (isGun)
+							PhysGrabObjectCache cache = GetOrCreateCache(physGrabObject);
+							
+							if (!cache.isActive || !cache.isGun) continue;
+
+							if (cache.gun != null && cache.gun.gunMuzzle != null)
 							{
-								ItemGun itemGun = physGrabObject.GetComponent<ItemGun>();
-								if (itemGun != null && itemGun.gunMuzzle != null)
+								Vector3 barrelPosition = cache.gun.gunMuzzle.position;
+								Vector3 barrelDirection = cache.gun.gunMuzzle.forward;
+
+								float laserDistance = cache.gun.gunRange;
+								Vector3 laserEndPoint = barrelPosition + (barrelDirection * laserDistance);
+
+								RaycastHit hit;
+								Color laserColor = Color.red;
+
+								int shootLayerMask = SemiFunc.LayerMaskGetShouldHits();
+
+								if (Physics.Raycast(barrelPosition, barrelDirection, out hit, laserDistance, shootLayerMask))
 								{
-									Vector3 barrelPosition = itemGun.gunMuzzle.position;
-									Vector3 barrelDirection = itemGun.gunMuzzle.forward;
+									laserEndPoint = hit.point;
 
-									float laserDistance = itemGun.gunRange; // Use actual gun range
-									Vector3 laserEndPoint = barrelPosition + (barrelDirection * laserDistance);
-
-									// Perform raycast to check if laser can hit something
-									RaycastHit hit;
-									Color laserColor = Color.red; // Default: cannot hit (red)
-
-									// Use the SAME LayerMask that the gun uses for shooting
-									int shootLayerMask = SemiFunc.LayerMaskGetShouldHits();
-
-									if (Physics.Raycast(barrelPosition, barrelDirection, out hit, laserDistance, shootLayerMask))
+									if (hit.collider.gameObject.layer == LayerMask.NameToLayer("Enemy"))
 									{
-										// Hit something - use actual hit position
-										laserEndPoint = hit.point;
+										laserColor = Color.green;
+									}
+									else
+									{
+										Enemy enemy = hit.collider.GetComponentInParent<Enemy>();
+										EnemyParent enemyParent = hit.collider.GetComponentInParent<EnemyParent>();
 
-										// Check what we hit and color accordingly
-										if (hit.collider.gameObject.layer == LayerMask.NameToLayer("Enemy"))
+										if (enemy != null || enemyParent != null)
 										{
-											// Hit an enemy - green
 											laserColor = Color.green;
 										}
-										else
+										else if (hit.collider.gameObject.CompareTag("Player"))
 										{
-											// Try to check if it's an enemy by component
-											Enemy enemy = hit.collider.GetComponentInParent<Enemy>();
-											EnemyParent enemyParent = hit.collider.GetComponentInParent<EnemyParent>();
-
-											if (enemy != null || enemyParent != null)
-											{
-												// Definitely hit an enemy - green
-												laserColor = Color.green;
-											}
-											else if (hit.collider.gameObject.CompareTag("Player"))
-											{
-												// Hit a player - cyan color
-												laserColor = Color.cyan;
-											}
+											laserColor = Color.cyan;
 										}
 									}
+								}
 
-									Vector3 viewportStart = cam.WorldToViewportPoint(barrelPosition);
-									Vector3 viewportEnd = cam.WorldToViewportPoint(laserEndPoint);
+								Vector3 viewportStart = cam.WorldToViewportPoint(barrelPosition);
+								Vector3 viewportEnd = cam.WorldToViewportPoint(laserEndPoint);
 
-									if (viewportStart.z > 0 && viewportEnd.z > 0)
+								if (viewportStart.z > 0 && viewportEnd.z > 0)
+								{
+									Vector2 screenStart = new Vector2(viewportStart.x * Screen.width, (1 - viewportStart.y) * Screen.height);
+									Vector2 screenEnd = new Vector2(viewportEnd.x * Screen.width, (1 - viewportEnd.y) * Screen.height);
+
+									espData.Tracers.Add(new ExternalWindow.ESPLine
 									{
-										Vector2 screenStart = new Vector2(viewportStart.x * Screen.width, (1 - viewportStart.y) * Screen.height);
-										Vector2 screenEnd = new Vector2(viewportEnd.x * Screen.width, (1 - viewportEnd.y) * Screen.height);
-
-										espData.Tracers.Add(new ExternalWindow.ESPLine
-										{
-											start = screenStart,
-											end = screenEnd,
-											color = laserColor
-										});
-									}
+										start = screenStart,
+										end = screenEnd,
+										color = laserColor
+									});
 								}
 							}
 						}
@@ -708,7 +783,7 @@ namespace REPX
 				bool b_PlayerEsp = this._settingsData.b_PlayerEsp;
 				if (b_PlayerEsp)
 				{
-					UI.Checkbox(ref this._settingsData.b_PlayerNameEsp, "Player Name Esp", "Show names above highlighted players.");
+					UI.Checkbox(ref this._settingsData.b_PlayerNameEsp, "Show names above highlighted players.");
 				}
 				UI.Checkbox(ref this._settingsData.b_EnemyEsp, "Enemy Esp", "Highlight enemies.");
 				bool b_EnemyEsp = this._settingsData.b_EnemyEsp;
