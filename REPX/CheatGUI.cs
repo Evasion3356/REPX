@@ -9,6 +9,7 @@ using REPX.Cheats;
 using REPX.Data;
 using REPX.Extensions;
 using REPX.Helpers;
+using REPX.Patches.Game.Player;
 using UnityEngine;
 
 namespace REPX
@@ -17,6 +18,7 @@ namespace REPX
 	{
 		internal static CheatGUI Instance { get; private set; }
 		internal static Color orange = new Color(1f, 0.6470588f, 0f, 1f);
+		internal static readonly int shootLayerMask = SemiFunc.LayerMaskGetShouldHits();
 
 		// Cache structure for PhysGrabObject components and properties
 		private class PhysGrabObjectCache
@@ -26,11 +28,14 @@ namespace REPX
 			public PhysGrabCart cart;
 			public ItemDrone drone;
 			public ItemUpgrade upgrade;
+			public ItemMelee melee;
 			public ItemGun gun;
 			public bool isValuable;
 			public bool isCart;
 			public bool isGun;
 			public bool isMelee;
+			public bool isDrone;
+			public bool isUpgrade;
 			public bool isActive;
 			public int lastFrameUpdated;
 		}
@@ -122,18 +127,70 @@ namespace REPX
 
 		private void CleanupCache()
 		{
-			// Remove cached entries for objects that no longer exist or haven't been updated recently
-			var keysToRemove = new List<PhysGrabObject>();
-			foreach (var kvp in _physGrabObjectCache)
-			{
-				if (kvp.Key == null || (_currentFrame - kvp.Value.lastFrameUpdated) > 600)
-				{
-					keysToRemove.Add(kvp.Key);
-				}
-			}
+			// Safety cleanup for any edge cases where OnDestroy wasn't called
+			var keysToRemove = _physGrabObjectCache.Keys.Where(k => k == null).ToList();
 			foreach (var key in keysToRemove)
 			{
 				_physGrabObjectCache.Remove(key);
+			}
+		}
+
+		// Update the cache methods to be internal and accessible from the patch
+		internal void CreateCache(PhysGrabObject physGrabObject)
+		{
+			if (_physGrabObjectCache.ContainsKey(physGrabObject))
+				return;
+
+			ValuableObject valuableObject = physGrabObject.GetComponent<ValuableObject>();
+			PhysGrabCart cart = physGrabObject.GetComponent<PhysGrabCart>();
+			ItemGun gun = physGrabObject.GetComponent<ItemGun>();
+			ItemAttributes itemAttributes = physGrabObject.GetComponent<ItemAttributes>();
+			ItemDrone drone = physGrabObject.GetComponent<ItemDrone>();
+			ItemUpgrade upgrade = physGrabObject.GetComponent<ItemUpgrade>();
+			ItemMelee melee = physGrabObject.GetComponent<ItemMelee>();
+
+			var cache = new PhysGrabObjectCache
+			{
+				itemAttributes = itemAttributes,
+				valuableObject = valuableObject,
+				cart = cart,
+				drone = drone,
+				upgrade = upgrade,
+				melee = melee,
+				gun = gun,
+				isValuable = valuableObject != null,
+				isCart = cart != null,
+				isGun = gun != null,
+				isUpgrade = upgrade != null,
+				isMelee = melee != null,
+				isDrone = drone != null,
+				isActive = physGrabObject.GetField<bool>("isActive"),
+				lastFrameUpdated = _currentFrame
+			};
+
+			_physGrabObjectCache[physGrabObject] = cache;
+			//Log.LogInfo($"Cached PhysGrabObject on Start: {physGrabObject.name}");
+			//Log.LogInfo($"  itemAttributes: {(cache.itemAttributes != null ? cache.itemAttributes.GetField<string>("itemName") ?? "No Name" : "null")}");
+			//Log.LogInfo($"  valuableObject: {(cache.valuableObject != null ? $"${cache.valuableObject.GetField<float>("dollarValueCurrent"):F2}" : "null")}");
+			//Log.LogInfo($"  cart: {(cache.cart != null ? $"Haul: ${cache.cart.GetField<int>("haulCurrent")}" : "null")}");
+			//Log.LogInfo($"  drone: {(cache.drone != null ? "Yes" : "null")}");
+			//Log.LogInfo($"  upgrade: {(cache.upgrade != null ? "Yes" : "null")}");
+			//Log.LogInfo($"  gun: {(cache.gun != null ? "Yes" : "null")}");
+			//Log.LogInfo($"  isValuable: {cache.isValuable}");
+			//Log.LogInfo($"  isCart: {cache.isCart}");
+			//Log.LogInfo($"  isGun: {cache.isGun}");
+			//Log.LogInfo($"  isMelee: {cache.isMelee}");
+			//Log.LogInfo($"  isUpgrade: {cache.isUpgrade}");
+			//Log.LogInfo($"  isDrone: {cache.isDrone}");
+			//Log.LogInfo($"  isActive: {cache.isActive}");
+			//Log.LogInfo($"  lastFrameUpdated: {cache.lastFrameUpdated}");
+		}
+
+		internal void RemoveCache(PhysGrabObject physGrabObject)
+		{
+			if (_physGrabObjectCache.Remove(physGrabObject))
+			{
+				//Log.LogInfo($"Removed PhysGrabObject cache on Destroy: {physGrabObject.name}");
 			}
 		}
 
@@ -141,24 +198,9 @@ namespace REPX
 		{
 			if (!_physGrabObjectCache.TryGetValue(physGrabObject, out PhysGrabObjectCache cache))
 			{
-				cache = new PhysGrabObjectCache();
-				
-				// Cache all GetComponent calls
-				cache.itemAttributes = physGrabObject.GetComponent<ItemAttributes>();
-				cache.valuableObject = physGrabObject.GetComponent<ValuableObject>();
-				cache.cart = physGrabObject.GetComponent<PhysGrabCart>();
-				cache.drone = physGrabObject.GetComponent<ItemDrone>();
-				cache.upgrade = physGrabObject.GetComponent<ItemUpgrade>();
-				cache.gun = physGrabObject.GetComponent<ItemGun>();
-				
-				// Cache boolean fields
-				cache.isValuable = physGrabObject.GetField<bool>("isValuable");
-				cache.isCart = physGrabObject.GetField<bool>("isCart");
-				cache.isGun = physGrabObject.GetField<bool>("isGun");
-				cache.isMelee = physGrabObject.GetField<bool>("isMelee");
-				
-				_physGrabObjectCache[physGrabObject] = cache;
-				Log.LogInfo($"Cached PhysGrabObject: {physGrabObject.name}");
+				// Fallback: create cache if it somehow wasn't created in Awake
+				CreateCache(physGrabObject);
+				cache = _physGrabObjectCache[physGrabObject];
 			}
 			
 			// Update isActive every frame (this can change frequently)
@@ -170,13 +212,13 @@ namespace REPX
 
 		private void RenderExternalESP()
 		{
-
 			try
 			{
 				var espData = new ExternalWindow.ESPRenderData();
 
+				// Use cached SemiFunc values from PlayerAvatarPatch
 				if (!Settings.Instance.SettingsData.b_Esp || Input.GetKey(KeyCode.RightShift) ||
-					(Camera.main == null || SemiFunc.IsMainMenu() || SemiFunc.RunIsLobbyMenu() || LoadingUI.instance.gameObject.activeSelf))
+					(Camera.main == null || PlayerAvatarPatch.Cache.isMainMenu || PlayerAvatarPatch.Cache.runIsLobbyMenu || LoadingUI.instance.gameObject.activeSelf))
 				{
 					ExternalWindow.UpdateESPData(espData);
 					return; 
@@ -277,8 +319,8 @@ namespace REPX
 					}
 				}
 
-				// Render Items
-				if (settings.b_ItemEsp && !SemiFunc.RunIsLobby())
+				// Render Items - Use cached runIsLobby
+				if (settings.b_ItemEsp && !PlayerAvatarPatch.Cache.runIsLobby)
 				{
 					foreach (PhysGrabObject physGrabObject in MonoHelper.CatchedPhysGrabObjects)
 					{
@@ -327,14 +369,14 @@ namespace REPX
 							}
 
 							// Drones
-							if (cache.drone != null && cache.itemAttributes != null)
+							if (cache.isDrone && cache.itemAttributes != null)
 							{
 								string itemName = cache.itemAttributes.GetField<string>("itemName");
 								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, itemName, settings.c_ItemEspColorDrone, settings.f_EspRange, settings.b_Tracer);
 							}
 
 							// Upgrades
-							if (cache.upgrade != null && !SemiFunc.RunIsShop() && cache.itemAttributes != null)
+							if (cache.isUpgrade && !PlayerAvatarPatch.Cache.runIsShop && cache.itemAttributes != null)
 							{
 								string itemName = cache.itemAttributes.GetField<string>("itemName");
 								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, itemName, orange, settings.f_EspRange, settings.b_Tracer);
@@ -395,8 +437,8 @@ namespace REPX
 					}
 				}
 
-				// Render Laser (gun laser sight)
-				if (settings.b_LaserESP && !SemiFunc.RunIsLobby())
+				// Render Laser (gun laser sight) - Use cached runIsLobby
+				if (settings.b_LaserESP && !PlayerAvatarPatch.Cache.runIsLobby)
 				{
 					foreach (PhysGrabObject physGrabObject in MonoHelper.CatchedPhysGrabObjects)
 					{
@@ -418,8 +460,6 @@ namespace REPX
 
 								RaycastHit hit;
 								Color laserColor = Color.red;
-
-								int shootLayerMask = SemiFunc.LayerMaskGetShouldHits();
 
 								if (Physics.Raycast(barrelPosition, barrelDirection, out hit, laserDistance, shootLayerMask))
 								{
@@ -689,10 +729,12 @@ namespace REPX
 			GUILayout.BeginHorizontal(Array.Empty<GUILayoutOption>());
 			UI.Tab<UI.Tabs>("About", ref UI.nTab, UI.Tabs.About, false);
 			UI.Tab<UI.Tabs>("ESP", ref UI.nTab, UI.Tabs.ESP, false);
-			bool flag2 = !SemiFunc.IsMainMenu();
+			// Use cached isMainMenu
+			bool flag2 = !PlayerAvatarPatch.Cache.isMainMenu;
 			if (flag2)
 			{
-				bool flag3 = !SemiFunc.RunIsLobbyMenu();
+				// Use cached runIsLobbyMenu
+				bool flag3 = !PlayerAvatarPatch.Cache.runIsLobbyMenu;
 				if (flag3)
 				{
 					UI.Tab<UI.Tabs>("Self", ref UI.nTab, UI.Tabs.Self, false);
@@ -715,7 +757,8 @@ namespace REPX
 					break;
 				case UI.Tabs.Self:
 					{
-						bool flag5 = SemiFunc.IsMainMenu() || SemiFunc.RunIsLobbyMenu();
+						// Use cached values
+						bool flag5 = PlayerAvatarPatch.Cache.isMainMenu || PlayerAvatarPatch.Cache.runIsLobbyMenu;
 						if (flag5)
 						{
 							UI.nTab = UI.Tabs.About;
@@ -728,7 +771,8 @@ namespace REPX
 					}
 				case UI.Tabs.Players:
 					{
-						bool flag6 = SemiFunc.IsMainMenu();
+						// Use cached isMainMenu
+						bool flag6 = PlayerAvatarPatch.Cache.isMainMenu;
 						if (flag6)
 						{
 							UI.nTab = UI.Tabs.About;
@@ -850,7 +894,8 @@ namespace REPX
 				UI.TextBox(ref steamId, "Steam Id:", "", 200, 0);
 			}
 
-			if (!SemiFunc.RunIsLobbyMenu())
+			// Use cached runIsLobbyMenu
+			if (!PlayerAvatarPatch.Cache.runIsLobbyMenu)
 			{
 				UI.Slider(ref this._dhAmount, 0f, 200f, "Heal Amount", "the Heal amount.", true);
 				UI.Button("Heal", "Heal the player.", () =>
@@ -865,7 +910,8 @@ namespace REPX
 				});
 			}
 
-			if (SemiFunc.IsMultiplayer())
+			// Use cached isMultiplayer
+			if (PlayerAvatarPatch.Cache.isMultiplayer)
 			{
 				UI.Header("Multiplayer");
 				if (!isAllPlayers)
@@ -1095,7 +1141,8 @@ namespace REPX
 					}
 				});
 
-				bool flag2 = SemiFunc.RunIsLevel();
+				// Use cached runIsLevel
+				bool flag2 = PlayerAvatarPatch.Cache.runIsLevel;
 				if (flag2)
 				{
 					List<GameObject> extractionPoints = RoundDirector.instance.GetField<List<GameObject>>("extractionPointList");
@@ -1121,7 +1168,8 @@ namespace REPX
 									UI.Slider(ref this._newExtractionGoal, 0, 100000, "New Goal", "Amount of cash needed for new extraction goal.");
 									UI.Button("Set Extraction Goal", "Sets a new cash goal for the current selected extraction.", () =>
 									{
-										if (!SemiFunc.IsMultiplayer())
+										// Use cached isMultiplayer
+										if (!PlayerAvatarPatch.Cache.isMultiplayer)
 										{
 											selectedExtraction.HaulGoalSetRPC(this._newExtractionGoal);
 										}
@@ -1130,7 +1178,8 @@ namespace REPX
 									UI.Slider(ref this._surplusExtractionGoal, 0, 100000, "Surplus Amount", "Amount of cash set when activating extraction..");
 									UI.Button("Surplus Extraction", "Activates extraction to calculate input amount of cash.", () =>
 									{
-										if (!SemiFunc.IsMultiplayer())
+										// Use cached isMultiplayer
+										if (!PlayerAvatarPatch.Cache.isMultiplayer)
 										{
 											selectedExtraction.ExtractionPointSurplusRPC(this._surplusExtractionGoal);
 										}
@@ -1148,7 +1197,8 @@ namespace REPX
 			bool flag = this._settingsData != null;
 			if (flag)
 			{
-				bool flag2 = !SemiFunc.IsMainMenu();
+				// Use cached isMainMenu
+				bool flag2 = !PlayerAvatarPatch.Cache.isMainMenu;
 				if (flag2)
 				{
 					UI.Button("Force Exit Game", "Forces the local player to exit the current game.", () =>

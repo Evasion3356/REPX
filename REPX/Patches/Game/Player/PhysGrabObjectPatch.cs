@@ -15,6 +15,7 @@ namespace REPX.Patches.Game.Player
 		private static void Awake_Postfix(PhysGrabObject __instance)
 		{
 			MonoHelper.CatchedPhysGrabObjects.Add(__instance);
+			CheatGUI.Instance?.CreateCache(__instance);
 		}
 
 		// Token: 0x06000064 RID: 100 RVA: 0x00005C1F File Offset: 0x00003E1F
@@ -23,6 +24,7 @@ namespace REPX.Patches.Game.Player
 		private static void OnDestroy_Postfix(PhysGrabObject __instance)
 		{
 			MonoHelper.CatchedPhysGrabObjects.Remove(__instance);
+			CheatGUI.Instance?.RemoveCache(__instance);
 		}
 	}
 }

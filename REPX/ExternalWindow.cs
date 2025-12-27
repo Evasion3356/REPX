@@ -303,7 +303,7 @@ namespace REPX
 
 		// Frame counter for periodic window sync
 		private static int _frameCounter = 0;
-		private const int SYNC_INTERVAL_FRAMES = 60; // Sync window position every 60 frames (~1 second at 60fps)
+		private const int SYNC_INTERVAL_FRAMES = 144; // Sync window position every 144 frames (~1 second at 144fps)
 
 		// Cached brush for clearing
 		private static IntPtr _clearBrush = IntPtr.Zero;
