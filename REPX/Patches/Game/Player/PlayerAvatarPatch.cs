@@ -58,17 +58,11 @@ namespace REPX.Patches.Game.Player
 
 		private static IEnumerator WaitForLevelGenerationAndCalculate()
 		{
-			// Log once at the start
-			Log.LogInfo("Waiting for level generation...");
-			
 			// Wait until the level is actually generated (without spamming logs)
 			while (LevelGenerator.Instance == null || !LevelGenerator.Instance.Generated)
 			{
 				yield return new WaitForSeconds(0.5f);
 			}
-
-			// Log when generation is complete
-			Log.LogInfo("Level generation complete, calculating paths...");
 
 			// Additional small delay to ensure everything is initialized
 			yield return new WaitForSeconds(0.5f);
@@ -79,7 +73,7 @@ namespace REPX.Patches.Game.Player
 				ClosestExtractionPoint = CalculateClosestExtractionPointToTruck();
 				if (ClosestExtractionPoint != null)
 				{
-					Log.LogInfo(string.Format("Closest Extraction Point reference stored: {0}", ClosestExtractionPoint.name));
+					//Log.LogInfo(string.Format("Closest Extraction Point reference stored: {0}", ClosestExtractionPoint.name));
 				}
 				hasCalculatedForCurrentLevel = true;
 			}
@@ -93,13 +87,13 @@ namespace REPX.Patches.Game.Player
 			Cache.runIsShop = SemiFunc.RunIsShop();
 			Cache.isMultiplayer = SemiFunc.IsMultiplayer();
 			Cache.runIsLevel = SemiFunc.RunIsLevel();
-			Log.LogInfo("SemiFunc Cache Updated: " +
+			/*Log.LogInfo("SemiFunc Cache Updated: " +
 				$"isMainMenu={Cache.isMainMenu}, " +
 				$"runIsLobbyMenu={Cache.runIsLobbyMenu}, " +
 				$"runIsLobby={Cache.runIsLobby}, " +
 				$"runIsShop={Cache.runIsShop}, " +
 				$"isMultiplayer={Cache.isMultiplayer}, " +
-				$"runIsLevel={Cache.runIsLevel}");
+				$"runIsLevel={Cache.runIsLevel}");*/
 
 			// Don't calculate here - it's too early
 			// Reset the reference when not in a level
@@ -171,7 +165,7 @@ namespace REPX.Patches.Game.Player
 				// Calculate NavMesh path from extraction point to truck
 				if (NavMesh.CalculatePath(extractionPosition, truckPosition, NavMesh.AllAreas, path))
 				{
-					if (path.status == NavMeshPathStatus.PathComplete)
+					if (path.status != NavMeshPathStatus.PathInvalid)
 					{
 						// Calculate total path length by summing distances between corners
 						float pathLength = 0f;
@@ -187,27 +181,17 @@ namespace REPX.Patches.Game.Player
 							closestExtractionPoint = ep;
 						}
 
-						Log.LogInfo(string.Format("Extraction Point {0}: Path distance to truck = {1:F2} units", i, pathLength));
+						//Log.LogInfo(string.Format("Extraction Point {0}: Path distance to truck = {1:F2} units", i, pathLength));
 					}
 					else
 					{
-						Log.LogWarning(string.Format("Extraction Point {0}: Path status = {1}", i, path.status));
+						Log.LogError(string.Format("Extraction Point {0}: NavMesh path is invalid", i));
 					}
 				}
 				else
 				{
-					Log.LogWarning(string.Format("Extraction Point {0}: Could not calculate path to truck", i));
+					Log.LogError(string.Format("Extraction Point {0}: Could not calculate path to truck because of missing NavMesh. (Custom map?)", i));
 				}
-			}
-
-			if (closestExtractionPoint != null)
-			{
-				Log.LogInfo(string.Format("Closest extraction point to truck (excluding index 0): {0} with distance {1:F2} units", 
-					closestExtractionPoint.name, shortestDistance));
-			}
-			else
-			{
-				Log.LogWarning("No valid paths found from any extraction point to truck");
 			}
 
 			return closestExtractionPoint;
