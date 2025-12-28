@@ -406,9 +406,16 @@ namespace REPX
 								if (ep.GetField<ExtractionPoint.State>("currentState") == ExtractionPoint.State.Complete) continue;
 
 								Color color = Color.white;
+								
+								// Check if this is the current extraction point
 								if (ep == RoundDirector.instance.GetField<ExtractionPoint>("extractionPointCurrent"))
 								{
 									color = Color.green;
+								}
+								// Check if this is the closest extraction point to the truck (by reference comparison)
+								else if (PlayerAvatarPatch.ClosestExtractionPoint != null && ep == PlayerAvatarPatch.ClosestExtractionPoint)
+								{
+									color = Color.magenta;
 								}
 
 								AddEspElement(espData, cam, gameObject.transform.position, (1f, 1f), string.Format("Extraction Point ({0})", num), color, settings.f_EspRange, false);

@@ -533,10 +533,10 @@ namespace REPX
 		{
 			try
 			{
-				gameWindow = FindWindow(null, "R.E.P.O");
+				gameWindow = FindWindow(null, "R.E.P.O.");
 				if (gameWindow == IntPtr.Zero)
-				{
-					Log.LogError("Could not find game window 'R.E.P.O'");
+				{ 
+					Log.LogError("Could not find game window 'R.E.P.O.'");
 				}
 
 				wndProcDelegate = new WndProc(MyWndProc);

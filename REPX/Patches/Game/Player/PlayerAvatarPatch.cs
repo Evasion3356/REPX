@@ -6,8 +6,11 @@ using REPX.Extensions;
 using REPX.Helpers;
 using REPX.Modules;
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace REPX.Patches.Game.Player
 {
@@ -28,6 +31,12 @@ namespace REPX.Patches.Game.Player
 		// Static cache instance accessible by CheatGUI
 		internal static SemiFuncCache Cache { get; private set; } = new SemiFuncCache();
 
+		// Stores a direct reference to the closest extraction point (excluding index 0)
+		internal static ExtractionPoint ClosestExtractionPoint { get; private set; } = null;
+
+		// Flag to track if we've already calculated for this level
+		private static bool hasCalculatedForCurrentLevel = false;
+
 		[HarmonyPatch("Awake")]
 		[HarmonyPostfix]
 		private static void Start_Postfix(PlayerAvatar __instance)
@@ -36,6 +45,44 @@ namespace REPX.Patches.Game.Player
 			
 			// Update SemiFunc cache when player entity is created (once per level)
 			UpdateSemiFuncCache();
+
+			// Reset the calculation flag when a new level loads
+			hasCalculatedForCurrentLevel = false;
+
+			// Start a coroutine to wait for level generation
+			if (Cache.runIsLevel && !Cache.runIsShop)
+			{
+				__instance.StartCoroutine(WaitForLevelGenerationAndCalculate());
+			}
+		}
+
+		private static IEnumerator WaitForLevelGenerationAndCalculate()
+		{
+			// Log once at the start
+			Log.LogInfo("Waiting for level generation...");
+			
+			// Wait until the level is actually generated (without spamming logs)
+			while (LevelGenerator.Instance == null || !LevelGenerator.Instance.Generated)
+			{
+				yield return new WaitForSeconds(0.5f);
+			}
+
+			// Log when generation is complete
+			Log.LogInfo("Level generation complete, calculating paths...");
+
+			// Additional small delay to ensure everything is initialized
+			yield return new WaitForSeconds(0.5f);
+
+			// Only calculate once per level
+			if (!hasCalculatedForCurrentLevel)
+			{
+				ClosestExtractionPoint = CalculateClosestExtractionPointToTruck();
+				if (ClosestExtractionPoint != null)
+				{
+					Log.LogInfo(string.Format("Closest Extraction Point reference stored: {0}", ClosestExtractionPoint.name));
+				}
+				hasCalculatedForCurrentLevel = true;
+			}
 		}
 
 		private static void UpdateSemiFuncCache()
@@ -53,6 +100,117 @@ namespace REPX.Patches.Game.Player
 				$"runIsShop={Cache.runIsShop}, " +
 				$"isMultiplayer={Cache.isMultiplayer}, " +
 				$"runIsLevel={Cache.runIsLevel}");
+
+			// Don't calculate here - it's too early
+			// Reset the reference when not in a level
+			if (!Cache.runIsLevel || Cache.runIsShop)
+			{
+				ClosestExtractionPoint = null;
+				hasCalculatedForCurrentLevel = false;
+			}
+		}
+
+		/// <summary>
+		/// Calculates which extraction point (excluding index 0) has the shortest NavMesh path to the truck.
+		/// Returns a direct reference to the closest ExtractionPoint, or null if none found.
+		/// </summary>
+		private static ExtractionPoint CalculateClosestExtractionPointToTruck()
+		{
+			if (LevelGenerator.Instance == null || !LevelGenerator.Instance.Generated)
+			{
+				Log.LogWarning("Level not generated yet");
+				return null;
+			}
+
+			// Find the truck position using the same approach as b_truckESP
+			var levelPathTruck = LevelGenerator.Instance.LevelPathTruck;
+			if (levelPathTruck == null)
+			{
+				Log.LogWarning("Truck not found in level");
+				return null;
+			}
+
+			Vector3 truckPosition = levelPathTruck.transform.position;
+
+			// Get extraction points using the same approach as b_extractionESP
+			if (RoundDirector.instance == null)
+			{
+				Log.LogWarning("RoundDirector instance not found");
+				return null;
+			}
+
+			List<GameObject> extractionPointList = RoundDirector.instance.GetField<List<GameObject>>("extractionPointList");
+			if (extractionPointList == null || extractionPointList.Count <= 1)
+			{
+				Log.LogWarning("Not enough extraction points (need at least 2)");
+				return null;
+			}
+
+			NavMeshPath path = new NavMeshPath();
+			ExtractionPoint closestExtractionPoint = null;
+			float shortestDistance = float.MaxValue;
+
+			// Start from index 1 to skip the first extraction point (index 0)
+			for (int i = 1; i < extractionPointList.Count; i++)
+			{
+				GameObject extractionPointObj = extractionPointList[i];
+				
+				if (extractionPointObj == null)
+				{
+					continue;
+				}
+
+				ExtractionPoint ep = extractionPointObj.GetComponent<ExtractionPoint>();
+				if (ep == null)
+				{
+					continue;
+				}
+
+				Vector3 extractionPosition = extractionPointObj.transform.position;
+
+				// Calculate NavMesh path from extraction point to truck
+				if (NavMesh.CalculatePath(extractionPosition, truckPosition, NavMesh.AllAreas, path))
+				{
+					if (path.status == NavMeshPathStatus.PathComplete)
+					{
+						// Calculate total path length by summing distances between corners
+						float pathLength = 0f;
+						for (int j = 0; j < path.corners.Length - 1; j++)
+						{
+							pathLength += Vector3.Distance(path.corners[j], path.corners[j + 1]);
+						}
+
+						// Update closest if this path is shorter
+						if (pathLength < shortestDistance)
+						{
+							shortestDistance = pathLength;
+							closestExtractionPoint = ep;
+						}
+
+						Log.LogInfo(string.Format("Extraction Point {0}: Path distance to truck = {1:F2} units", i, pathLength));
+					}
+					else
+					{
+						Log.LogWarning(string.Format("Extraction Point {0}: Path status = {1}", i, path.status));
+					}
+				}
+				else
+				{
+					Log.LogWarning(string.Format("Extraction Point {0}: Could not calculate path to truck", i));
+				}
+			}
+
+			if (closestExtractionPoint != null)
+			{
+				Log.LogInfo(string.Format("Closest extraction point to truck (excluding index 0): {0} with distance {1:F2} units", 
+					closestExtractionPoint.name, shortestDistance));
+			}
+			else
+			{
+				Log.LogWarning("No valid paths found from any extraction point to truck");
+			}
+
+			return closestExtractionPoint;
 		}
 
 		[HarmonyPatch("PlayerDeath")]
