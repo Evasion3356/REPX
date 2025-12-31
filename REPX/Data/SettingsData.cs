@@ -17,17 +17,11 @@ namespace REPX.Data
 		// Token: 0x04000038 RID: 56
 		public bool b_Invulnerable;
 
-		// Token: 0x04000039 RID: 57
-		public bool b_Invisibility;
-
 		// Token: 0x0400003A RID: 58
 		public bool b_AntiKnockBack;
 
 		// Token: 0x0400003B RID: 59
 		public bool b_NoTumble;
-
-		// Token: 0x0400003C RID: 60
-		public bool b_IndestructibleObjects;
 
 		// Token: 0x0400003D RID: 61
 		public bool b_HearEveryone;

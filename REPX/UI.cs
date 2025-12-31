@@ -497,7 +497,7 @@ namespace REPX
 			return texture2D;
 		}
 
-		internal static UI.Tabs nTab = UI.Tabs.About;
+		internal static UI.Tabs nTab = UI.Tabs.ESP;
 		internal static string strTooltip = null;
 		private static Dictionary<string, UI.DropdownState> dropdownStates = new Dictionary<string, UI.DropdownState>();
 		private static readonly Dictionary<int, string> keyNames = new Dictionary<int, string>
@@ -529,7 +529,7 @@ namespace REPX
 
 		internal enum Tabs
 		{
-			About, ESP, Self, Players, Level, Misc, Settings
+			ESP, Self, Players, Level, Misc, Settings
 		}
 
 		private class DropdownState

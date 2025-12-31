@@ -110,12 +110,6 @@ namespace REPX.Patches.Game.Player
 		/// </summary>
 		private static ExtractionPoint CalculateClosestExtractionPointToTruck()
 		{
-			if (LevelGenerator.Instance == null || !LevelGenerator.Instance.Generated)
-			{
-				Log.LogWarning("Level not generated yet");
-				return null;
-			}
-
 			// Find the truck position using the same approach as b_truckESP
 			var levelPathTruck = LevelGenerator.Instance.LevelPathTruck;
 			if (levelPathTruck == null)
@@ -125,7 +119,6 @@ namespace REPX.Patches.Game.Player
 			}
 
 			Vector3 truckPosition = levelPathTruck.transform.position;
-
 			// Get extraction points using the same approach as b_extractionESP
 			if (RoundDirector.instance == null)
 			{
@@ -136,7 +129,7 @@ namespace REPX.Patches.Game.Player
 			List<GameObject> extractionPointList = RoundDirector.instance.GetField<List<GameObject>>("extractionPointList");
 			if (extractionPointList == null || extractionPointList.Count <= 1)
 			{
-				Log.LogWarning("Not enough extraction points (need at least 2)");
+				//Log.LogWarning("Not enough extraction points (need at least 2)");
 				return null;
 			}
 

@@ -162,7 +162,6 @@
     <Compile Include="Microsoft\CodeAnalysis\EmbeddedAttribute.cs" />
     <Compile Include="Modules\ExtendedPlayerData.cs" />
     <Compile Include="Modules\ExtendedPlayerDataExtension.cs" />
-    <Compile Include="Patches\Game\Player\PhysGrabObjectImpactDetectorPatch.cs" />
     <Compile Include="Patches\Game\Player\PhysGrabObjectPatch.cs" />
     <Compile Include="Patches\Game\Player\PlayerAvatarPatch.cs" />
     <Compile Include="Patches\Game\Player\PlayerControllerPatch.cs" />

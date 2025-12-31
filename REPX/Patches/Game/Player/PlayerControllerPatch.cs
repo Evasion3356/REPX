@@ -1,6 +1,4 @@
-﻿using System;
-using System.Runtime.CompilerServices;
-using HarmonyLib;
+﻿using HarmonyLib;
 using REPX.Data;
 using UnityEngine;
 

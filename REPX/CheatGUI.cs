@@ -734,7 +734,6 @@ namespace REPX
 				return;
 			GUI.DragWindow(new Rect(0f, 0f, Settings.Instance.WindowRect.width, 20f));
 			GUILayout.BeginHorizontal(Array.Empty<GUILayoutOption>());
-			UI.Tab<UI.Tabs>("About", ref UI.nTab, UI.Tabs.About, false);
 			UI.Tab<UI.Tabs>("ESP", ref UI.nTab, UI.Tabs.ESP, false);
 			// Use cached isMainMenu
 			bool flag2 = !PlayerAvatarPatch.Cache.isMainMenu;
@@ -756,21 +755,12 @@ namespace REPX
 			UI.Reset();
 			switch (UI.nTab)
 			{
-				case UI.Tabs.About:
-					this.DrawAboutTab();
-					break;
 				case UI.Tabs.ESP:
 					this.DrawESPTab();
 					break;
 				case UI.Tabs.Self:
 					{
-						// Use cached values
-						bool flag5 = PlayerAvatarPatch.Cache.isMainMenu || PlayerAvatarPatch.Cache.runIsLobbyMenu;
-						if (flag5)
-						{
-							UI.nTab = UI.Tabs.About;
-						}
-						else
+						if (!(PlayerAvatarPatch.Cache.isMainMenu || PlayerAvatarPatch.Cache.runIsLobbyMenu))
 						{
 							this.DrawSelfTab();
 						}
@@ -778,13 +768,7 @@ namespace REPX
 					}
 				case UI.Tabs.Players:
 					{
-						// Use cached isMainMenu
-						bool flag6 = PlayerAvatarPatch.Cache.isMainMenu;
-						if (flag6)
-						{
-							UI.nTab = UI.Tabs.About;
-						}
-						else
+						if (!PlayerAvatarPatch.Cache.isMainMenu)
 						{
 							this.DrawPlayersTab();
 						}
@@ -807,13 +791,6 @@ namespace REPX
 				UI.RenderTooltip();
 			}
 			GUI.DragWindow(new Rect(0f, 0f, 0f, 20f));
-		}
-
-		private void DrawAboutTab()
-		{
-			string text = "Welcome to REPX v" + CheatGUI.version + " by DiegoTheWise & gir489\n\nFeatures:\nInformation Spoofing\nESP\nMisc Cheats\nSavable Config\nAnd more!";
-			string text2 = "\n\nChange Log:\nAdded: Level Tab.\nAdded: All Players option in Players Tab.\nAdded: Force Name in Players Tab.\nAdded: Force Message in Players Tab.\nAdded: Shake Screen in Players Tab.\nAdded: Fake Lag in Players Tab.\nAdded: Disable Player in Players Tab.\nAdded: Kick Player in Players Tab.\nAdded: Softlock Game in Trolling Tab.\nAnd much more!\n\nv1.1.1:\nUpdated for v0.3.2 of RE.P.O by gir489.\n\nv1.1.2:\nAdded stream-proof ESP.";
-			GUILayout.Label(text + text2, GUI.skin.textArea, new GUILayoutOption[] { GUILayout.ExpandHeight(true) });
 		}
 
 		private void DrawESPTab()
@@ -856,10 +833,8 @@ namespace REPX
 				UI.Checkbox(ref this._settingsData.b_InfiniteStamina, "Infinite Stamina", "Gives the local player Infinite Stamina.");
 				UI.Checkbox(ref this._settingsData.b_GodMode, "God Mode", "Puts the local player in a invulnerable state.");
 				UI.Checkbox(ref this._settingsData.b_Invulnerable, "Invulnerable", "Makes the local player be ignored by Enemy AI and other interactions.");
-				UI.Checkbox(ref this._settingsData.b_Invisibility, "Invisibility", "Makes the player invisible to other players, only works in multiplayer!");
 				UI.Checkbox(ref this._settingsData.b_AntiKnockBack, "Anti-Knock Back", "Prevents the local player from being able to be knocked back by force.");
 				UI.Checkbox(ref this._settingsData.b_NoTumble, "No Tumble", "Prevents the local player from tumbling by unvoluntary action.");
-				UI.Checkbox(ref this._settingsData.b_IndestructibleObjects, "Indestructible Objects", "Makes objects not take damage by local actions.");
 				UI.Checkbox(ref this._settingsData.b_HearEveryone, "Hear Everyone", "Makes it where you can hear everyone no matter the range.");
 			}
 		}
@@ -1252,7 +1227,7 @@ namespace REPX
 		}
 
 		internal static readonly string GUID = "com.repx.loader";
-		internal static readonly string version = "1.1.2";
+		internal static readonly string version = "1.1.3";
 		internal static Harmony harmony;
 		private GUIStyle _style;
 		private SettingsData _settingsData;
