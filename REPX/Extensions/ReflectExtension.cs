@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
 namespace REPX.Extensions
 {

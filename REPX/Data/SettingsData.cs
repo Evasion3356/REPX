@@ -38,8 +38,8 @@ namespace REPX.Data
 		// Token: 0x04000041 RID: 65
 		public bool b_ItemEsp;
 
-		// Token: 0x04000042 RID: 66
 		public bool b_ItemValueEsp;
+		public bool b_ItemCartEsp;
 
 		// Token: 0x04000043 RID: 67
 		public bool b_PlayerEsp;

@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using HarmonyLib;
 using Photon.Pun;
 using Photon.Realtime;
-using REPX.Cheats;
 using REPX.Data;
 using REPX.Extensions;
 using REPX.Helpers;
@@ -347,6 +345,30 @@ namespace REPX
 									color = settings.c_ItemEspColorMedium;
 								else
 									color = settings.c_ItemEspColorHigh;
+
+								if (settings.b_ItemCartEsp && physGrabObject.grabbedLocal)
+								{
+									color = Color.red;
+
+									// Raycast downward using the PhysGrabObjectCart layer
+									RaycastHit hit;
+									bool raycastHit = Physics.Raycast(
+										physGrabObject.centerPoint,
+										Vector3.down,
+										out hit,
+										100f,
+										LayerMask.GetMask(new string[] { "PhysGrabObjectCart" }));
+
+									if (raycastHit)
+									{
+										// Get the PhysGrabCart component from the hit collider's parent
+										PhysGrabCart cart = hit.collider.GetComponentInParent<PhysGrabCart>();
+										if (cart != null)
+										{
+											color = Color.green;
+										}
+									}
+								}
 
 								string drawName = settings.b_ItemValueEsp ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "${0:N0}", value) : string.Empty;
 								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, drawName, color, settings.f_EspRange, settings.b_Tracer);
@@ -798,22 +820,23 @@ namespace REPX
 			bool flag = this._settingsData != null;
 			if (flag)
 			{
-				UI.Checkbox(ref this._settingsData.b_Esp, "Esp", "Toggle all ESP features on/off");
-				UI.Slider(ref this._settingsData.f_EspRange, 5f, 1000f, "Esp Range", "Set the maximum distance for ESP rendering.", false);
-				UI.Checkbox(ref this._settingsData.b_Tracer, "Esp Tracer", "Draw lines from player to ESP targets.");
-				UI.Checkbox(ref this._settingsData.b_ItemEsp, "Item Esp", "Highlight items in the world.");
+				UI.Checkbox(ref this._settingsData.b_Esp, "ESP", "Toggle all ESP features on/off");
+				UI.Slider(ref this._settingsData.f_EspRange, 5f, 1000f, "ESP Range", "Set the maximum distance for ESP rendering.", false);
+				UI.Checkbox(ref this._settingsData.b_Tracer, "ESP Tracer", "Draw lines from player to ESP targets.");
+				UI.Checkbox(ref this._settingsData.b_ItemEsp, "Item ESP", "Highlight items in the world.");
 				bool b_ItemEsp = this._settingsData.b_ItemEsp;
 				if (b_ItemEsp)
 				{
-					UI.Checkbox(ref this._settingsData.b_ItemValueEsp, "Item Value Esp", "Show how much the item is worth above the item.");
+					UI.Checkbox(ref this._settingsData.b_ItemValueEsp, "Item Value ESP", "Show how much the item is worth above the item.");
+					UI.Checkbox(ref this._settingsData.b_ItemCartEsp, "Item Cart ESP", "When the item is held, it will be red if not above a cart, green if it is.");
 				}
-				UI.Checkbox(ref this._settingsData.b_PlayerEsp, "Player Esp", "Highlight other players.");
+				UI.Checkbox(ref this._settingsData.b_PlayerEsp, "Player ESP", "Highlight other players.");
 				bool b_PlayerEsp = this._settingsData.b_PlayerEsp;
 				if (b_PlayerEsp)
 				{
 					UI.Checkbox(ref this._settingsData.b_PlayerNameEsp, "Show names above highlighted players.");
 				}
-				UI.Checkbox(ref this._settingsData.b_EnemyEsp, "Enemy Esp", "Highlight enemies.");
+				UI.Checkbox(ref this._settingsData.b_EnemyEsp, "Enemy ESP", "Highlight enemies.");
 				bool b_EnemyEsp = this._settingsData.b_EnemyEsp;
 				if (b_EnemyEsp)
 				{
