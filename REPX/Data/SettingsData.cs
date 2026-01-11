@@ -21,6 +21,9 @@ namespace REPX.Data
 		public bool b_AntiKnockBack;
 
 		// Token: 0x0400003B RID: 59
+		public bool b_AntiTumble;
+
+		// Token: 0x0400003B RID: 59
 		public bool b_NoTumble;
 
 		// Token: 0x0400003D RID: 61
@@ -85,7 +88,7 @@ namespace REPX.Data
 
 		public Color c_CartEspColor = Color.yellow;
 
-		public Color c_WeaponEspColor = Color.cyan;
+		public Color c_WeaponEspColor = new Color(0f, 1f, 1f, 1f);
 
 		public bool b_LaserESP;
 

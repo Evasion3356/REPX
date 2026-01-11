@@ -17,9 +17,10 @@ namespace REPX
 		internal static CheatGUI Instance { get; private set; }
 		internal static Color orange = new Color(1f, 0.6470588f, 0f, 1f);
 		internal static readonly int shootLayerMask = SemiFunc.LayerMaskGetShouldHits();
+		private bool _lastTumbleState;
 
 		// Cache structure for PhysGrabObject components and properties
-		private class PhysGrabObjectCache
+		public class PhysGrabObjectCache
 		{
 			public ItemAttributes itemAttributes;
 			public ValuableObject valuableObject;
@@ -114,12 +115,41 @@ namespace REPX
 		{
 			this.MenuUpdate();
 			this.SelectedPlayerUpdate();
+			this.DoAntiTumble();
 			this._currentFrame++;
 			
 			// Clean up cache every 300 frames (~5 seconds at 60fps)
 			if (this._currentFrame % 300 == 0)
 			{
 				CleanupCache();
+			}
+		}
+
+		private void DoAntiTumble()
+		{
+			if (this._settingsData?.b_AntiTumble != true) return;
+
+			PlayerController playerControllerInstance = PlayerController.instance;
+			if (playerControllerInstance == null || !LevelGenerator.Instance.Generated) return;
+
+			PlayerTumble playerTumble = playerControllerInstance.playerAvatarScript?.tumble;
+			if (playerTumble == null) return;
+
+			// Prevent involuntary tumbling and allow immediate recovery
+			playerTumble.SetField("tumbleOverride", false);
+			playerControllerInstance.SetField("tumbleInputDisableTimer", 0f);
+
+			// Handle TumbleUI visibility
+			if (TumbleUI.instance)
+			{
+				TumbleUI.instance.SetField("canExit", true);
+
+				bool isTumbling = playerTumble.GetField<bool>("isTumbling");
+				if (isTumbling != this._lastTumbleState)
+				{
+					TumbleUI.instance.gameObject.SetActive(isTumbling);
+					this._lastTumbleState = isTumbling;
+				}
 			}
 		}
 
@@ -192,7 +222,7 @@ namespace REPX
 			}
 		}
 
-		private PhysGrabObjectCache GetOrCreateCache(PhysGrabObject physGrabObject)
+		public PhysGrabObjectCache GetOrCreateCache(PhysGrabObject physGrabObject)
 		{
 			if (!_physGrabObjectCache.TryGetValue(physGrabObject, out PhysGrabObjectCache cache))
 			{
@@ -339,9 +369,9 @@ namespace REPX
 							{
 								int value = (int)cache.valuableObject.GetField<float>("dollarValueCurrent");
 								Color color;
-								if (value < 5000)
+								if (value < 4500)
 									color = settings.c_ItemEspColorLow;
-								else if (value >= 5000 && value <= 10000)
+								else if (value >= 4500 && value <= 9500)
 									color = settings.c_ItemEspColorMedium;
 								else
 									color = settings.c_ItemEspColorHigh;
@@ -356,7 +386,7 @@ namespace REPX
 										physGrabObject.centerPoint,
 										Vector3.down,
 										out hit,
-										100f,
+										15f,
 										LayerMask.GetMask(new string[] { "PhysGrabObjectCart" }));
 
 									if (raycastHit)
@@ -834,7 +864,7 @@ namespace REPX
 				bool b_PlayerEsp = this._settingsData.b_PlayerEsp;
 				if (b_PlayerEsp)
 				{
-					UI.Checkbox(ref this._settingsData.b_PlayerNameEsp, "Show names above highlighted players.");
+					UI.Checkbox(ref this._settingsData.b_PlayerNameEsp, "Player Name ESP", "Show names above highlighted players.");
 				}
 				UI.Checkbox(ref this._settingsData.b_EnemyEsp, "Enemy ESP", "Highlight enemies.");
 				bool b_EnemyEsp = this._settingsData.b_EnemyEsp;
@@ -857,6 +887,7 @@ namespace REPX
 				UI.Checkbox(ref this._settingsData.b_GodMode, "God Mode", "Puts the local player in a invulnerable state.");
 				UI.Checkbox(ref this._settingsData.b_Invulnerable, "Invulnerable", "Makes the local player be ignored by Enemy AI and other interactions.");
 				UI.Checkbox(ref this._settingsData.b_AntiKnockBack, "Anti-Knock Back", "Prevents the local player from being able to be knocked back by force.");
+				UI.Checkbox(ref this._settingsData.b_AntiTumble, "Anti-Tumble", "Prvents input loss while tumbling.");
 				UI.Checkbox(ref this._settingsData.b_NoTumble, "No Tumble", "Prevents the local player from tumbling by unvoluntary action.");
 				UI.Checkbox(ref this._settingsData.b_HearEveryone, "Hear Everyone", "Makes it where you can hear everyone no matter the range.");
 			}

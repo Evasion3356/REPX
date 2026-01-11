@@ -1,8 +1,5 @@
-﻿using REPX.Cheats;
-using REPX.Extensions;
-using REPX.Helpers;
+﻿using REPX.Helpers;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Threading;
