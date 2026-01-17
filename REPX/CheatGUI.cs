@@ -890,6 +890,7 @@ namespace REPX
 				UI.Checkbox(ref this._settingsData.b_AntiTumble, "Anti-Tumble", "Prvents input loss while tumbling.");
 				UI.Checkbox(ref this._settingsData.b_NoTumble, "No Tumble", "Prevents the local player from tumbling by unvoluntary action.");
 				UI.Checkbox(ref this._settingsData.b_HearEveryone, "Hear Everyone", "Makes it where you can hear everyone no matter the range.");
+				UI.Checkbox(ref this._settingsData.b_deleteSaves, "Delete Saves", "If unchecked, your saves won't get deleted when every one dies or quitting the game when dead.");
 			}
 		}
 

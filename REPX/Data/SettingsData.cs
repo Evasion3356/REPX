@@ -95,5 +95,7 @@ namespace REPX.Data
 		public bool b_extractionESP;
 
 		public bool b_truckESP;
+
+		public bool b_deleteSaves = true;
 	}
 }
