@@ -56,6 +56,8 @@ namespace REPX.Data
 		// Token: 0x04000046 RID: 70
 		public bool b_EnemyNameEsp;
 
+		public bool b_UnlockAllCosmetics;
+
 		// Token: 0x0400004E RID: 78
 		public bool b_IgnoreChat = true;
 
@@ -89,6 +91,10 @@ namespace REPX.Data
 		public Color c_CartEspColor = Color.yellow;
 
 		public Color c_WeaponEspColor = new Color(0f, 1f, 1f, 1f);
+
+		public bool b_VehicleEsp;
+
+		public Color c_VehicleEspColor = Color.yellow;
 
 		public bool b_LaserESP;
 

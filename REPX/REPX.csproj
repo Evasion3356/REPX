@@ -162,6 +162,8 @@
     <Compile Include="Modules\ExtendedPlayerData.cs" />
     <Compile Include="Modules\ExtendedPlayerDataExtension.cs" />
     <Compile Include="Patches\Game\DataDirectorPatch.cs" />
+    <Compile Include="Patches\Game\MenuElementCosmeticButtonPatch.cs" />
+    <Compile Include="Patches\Game\Player\ItemVehiclePatch.cs" />
     <Compile Include="Patches\Game\Player\PhysGrabObjectPatch.cs" />
     <Compile Include="Patches\Game\Player\PlayerAvatarPatch.cs" />
     <Compile Include="Patches\Game\Player\PlayerControllerPatch.cs" />

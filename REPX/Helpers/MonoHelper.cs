@@ -24,12 +24,17 @@ namespace REPX.Helpers
 			{
 				ComponentHolderProtocol.AddComponent<ExtendedPlayerData>(playerAvatar);
 			}
+			foreach (ItemVehicle vehicle in UnityEngine.Object.FindObjectsOfType<ItemVehicle>(true))
+			{
+				MonoHelper.CatchedItemVehicles.Add(vehicle);
+			}
 		}
 
 		// Token: 0x0600008B RID: 139 RVA: 0x0000679C File Offset: 0x0000499C
 		internal static void Dispose()
 		{
 			MonoHelper.CatchedPhysGrabObjects.Clear();
+			MonoHelper.CatchedItemVehicles.Clear();
 			foreach (ExtendedPlayerData extendedPlayerData in ExtendedPlayerData._extendedPlayerData.Values)
 			{
 				UnityEngine.Object.DestroyImmediate(extendedPlayerData);
@@ -39,5 +44,6 @@ namespace REPX.Helpers
 
 		// Token: 0x04000030 RID: 48
 		internal static List<PhysGrabObject> CatchedPhysGrabObjects = new List<PhysGrabObject>();
+		internal static List<ItemVehicle> CatchedItemVehicles = new List<ItemVehicle>();
 	}
 }

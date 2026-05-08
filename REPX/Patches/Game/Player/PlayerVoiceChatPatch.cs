@@ -11,41 +11,30 @@ namespace REPX.Patches.Game.Player
 	{
 		[HarmonyPatch("Update")]
 		[HarmonyPrefix]
-		private static bool Update_Prefix(PlayerVoiceChat __instance)
+		private static void Update_Prefix(PlayerVoiceChat __instance)
 		{
-			// Check if we're in lobby - if so, always execute original method
-			bool isInLobby = SemiFunc.RunIsLobbyMenu();
-			if (isInLobby)
-			{
-				return true; // Execute original Update method for normal lobby voice chat
-			}
+			// Only apply when in-game (not lobby menu) and feature is enabled
+			if (SemiFunc.RunIsLobbyMenu())
+				return;
 
-			// We're in-game now, check if "Hear Everyone" is enabled
-			bool b_HearEveryone = Settings.Instance.SettingsData.b_HearEveryone;
-			if (!b_HearEveryone)
-			{
-				return true; // Execute original Update method normally
-			}
+			if (!Settings.Instance.SettingsData.b_HearEveryone)
+				return;
 
-			// Safety check - make sure PlayerController and avatar exist
+			// Safety check
 			if (PlayerController.instance == null || PlayerController.instance.playerAvatarScript == null)
-			{
-				return true; // Execute original if not ready
-			}
+				return;
 
-			// In-game with "Hear Everyone" enabled - spoof as if we're in lobby
-			// Set inLobbyMixer to true to enable lobby voice chat behavior
-			bool field = __instance.GetField<bool>("inLobbyMixer");
-			bool field2 = PlayerController.instance.playerAvatarScript.GetField<bool>("deadSet");
-			
-			// Only set inLobbyMixer if player is not dead and not already set
-			if (!field2 && !field)
+			bool isDead = PlayerController.instance.playerAvatarScript.GetField<bool>("deadSet");
+			bool inLobbyMixer = __instance.GetField<bool>("inLobbyMixer");
+
+			// Set inLobbyMixer so the original Update uses lobby audio routing
+			if (!isDead && !inLobbyMixer)
 			{
 				__instance.SetField("inLobbyMixer", true);
 			}
-			
-			// Skip original Update to maintain our lobby spoofing
-			return false;
+
+			// Always let the original Update run so TTS, mic device polling,
+			// spatial audio, and all other 4.0 logic continues to work correctly.
 		}
 	}
 }

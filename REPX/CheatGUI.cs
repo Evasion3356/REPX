@@ -1,13 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using HarmonyLib;
+﻿using HarmonyLib;
 using Photon.Pun;
 using Photon.Realtime;
 using REPX.Data;
 using REPX.Extensions;
 using REPX.Helpers;
 using REPX.Patches.Game.Player;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace REPX
@@ -23,18 +23,20 @@ namespace REPX
 		public class PhysGrabObjectCache
 		{
 			public ItemAttributes itemAttributes;
-			public ValuableObject valuableObject;
-			public PhysGrabCart cart;
-			public ItemDrone drone;
-			public ItemUpgrade upgrade;
-			public ItemMelee melee;
-			public ItemGun gun;
-			public bool isValuable;
-			public bool isCart;
-			public bool isGun;
-			public bool isMelee;
-			public bool isDrone;
-			public bool isUpgrade;
+				public ValuableObject valuableObject;
+				public PhysGrabCart cart;
+				public ItemDrone drone;
+				public ItemUpgrade upgrade;
+				public ItemMelee melee;
+				public ItemGun gun;
+				public CosmeticWorldObject cosmeticWorldObject;
+				public bool isValuable;
+				public bool isCart;
+				public bool isGun;
+				public bool isMelee;
+				public bool isDrone;
+				public bool isUpgrade;
+				public bool isValuableBox;
 			public bool isActive;
 			public int lastFrameUpdated;
 		}
@@ -125,14 +127,32 @@ namespace REPX
 			}
 		}
 
+		private bool IsLocalPlayerInVehicle()
+		{
+			foreach (ItemVehicle vehicle in MonoHelper.CatchedItemVehicles)
+				{
+					if (vehicle == null || vehicle.seats == null) continue;
+					foreach (var seat in vehicle.seats)
+					{
+						if (seat != null && seat.seatedPlayer != null && seat.seatedPlayer.IsLocalPlayer())
+						{
+							return true;
+						}
+					}
+				}
+			return false;
+		}
+
 		private void DoAntiTumble()
 		{
 			if (this._settingsData?.b_AntiTumble != true) return;
 
 			PlayerController playerControllerInstance = PlayerController.instance;
-			if (playerControllerInstance == null || !LevelGenerator.Instance.Generated) return;
+			if (playerControllerInstance == null || !LevelGenerator.Instance.Generated || playerControllerInstance.playerAvatarScript == null) return;
 
-			PlayerTumble playerTumble = playerControllerInstance.playerAvatarScript?.tumble;
+			if (IsLocalPlayerInVehicle()) return;
+
+			PlayerTumble playerTumble = playerControllerInstance.playerAvatarScript.GetField<PlayerTumble>("tumble");
 			if (playerTumble == null) return;
 
 			// Prevent involuntary tumbling and allow immediate recovery
@@ -176,22 +196,25 @@ namespace REPX
 			ItemDrone drone = physGrabObject.GetComponent<ItemDrone>();
 			ItemUpgrade upgrade = physGrabObject.GetComponent<ItemUpgrade>();
 			ItemMelee melee = physGrabObject.GetComponent<ItemMelee>();
+			CosmeticWorldObject cosmeticWorldObject = physGrabObject.GetComponent<CosmeticWorldObject>();
 
-			var cache = new PhysGrabObjectCache
-			{
-				itemAttributes = itemAttributes,
-				valuableObject = valuableObject,
-				cart = cart,
-				drone = drone,
-				upgrade = upgrade,
-				melee = melee,
-				gun = gun,
-				isValuable = valuableObject != null,
-				isCart = cart != null,
-				isGun = gun != null,
-				isUpgrade = upgrade != null,
-				isMelee = melee != null,
-				isDrone = drone != null,
+				var cache = new PhysGrabObjectCache
+				{
+					itemAttributes = itemAttributes,
+					valuableObject = valuableObject,
+					cart = cart,
+					drone = drone,
+					upgrade = upgrade,
+					melee = melee,
+					gun = gun,
+					cosmeticWorldObject = cosmeticWorldObject,
+					isValuable = valuableObject != null,
+					isCart = cart != null,
+					isGun = gun != null,
+					isUpgrade = upgrade != null,
+					isMelee = melee != null,
+					isDrone = drone != null,
+					isValuableBox = cosmeticWorldObject != null,
 				isActive = physGrabObject.GetField<bool>("isActive"),
 				lastFrameUpdated = _currentFrame
 			};
@@ -272,7 +295,7 @@ namespace REPX
 							if (playerAvatar.IsDead())
 							{
 								sizeY = 1f;
-								PlayerDeathHead playerDeathHead = playerAvatar.playerDeathHead;
+								PlayerDeathHead playerDeathHead = playerAvatar.GetField<PlayerDeathHead>("playerDeathHead");
 								if (playerDeathHead != null)
 								{
 									targetPosition = playerDeathHead.GetField<PhysGrabObject>("physGrabObject").centerPoint;
@@ -404,6 +427,21 @@ namespace REPX
 								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, drawName, color, settings.f_EspRange, settings.b_Tracer);
 							}
 
+							if (cache.isValuableBox && cache.cosmeticWorldObject != null)
+								{
+									var rarity = cache.cosmeticWorldObject.rarity;
+									Color color = Color.green;
+									switch(rarity)
+									{
+										case SemiFunc.Rarity.Common: color = Color.green; break;
+										case SemiFunc.Rarity.Uncommon: color = Color.blue; break;
+										case SemiFunc.Rarity.Rare: color = new Color(1f, 0.41f, 0.71f); break;
+										case SemiFunc.Rarity.UltraRare : color = new Color(1f, 0.84f, 0f); break;
+									}
+									string drawName = settings.b_ItemValueEsp ? string.Format("Cosmetic Box", rarity) : string.Empty;
+									AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, drawName, color, settings.f_EspRange, settings.b_Tracer);
+								}
+
 							// Carts
 							if (cache.isCart && cache.cart != null)
 							{
@@ -493,6 +531,32 @@ namespace REPX
 					catch (Exception ex)
 					{
 						Log.LogError("RenderExternalESP - Truck Failed: " + ex.ToString());
+					}
+				}
+
+				// Render Vehicles
+				if (settings.b_VehicleEsp && !PlayerAvatarPatch.Cache.runIsLobby)
+				{
+					foreach (ItemVehicle vehicle in MonoHelper.CatchedItemVehicles)
+					{
+						try
+						{
+							if (vehicle == null) continue;
+
+								PhysGrabObject pgo = vehicle.GetComponent<PhysGrabObject>();
+								if (pgo == null) continue;
+							float distance = Vector3.Distance(pgo.centerPoint, cam.transform.parent.position);
+							var bounds = CalculateObjectBounds(pgo, distance);
+
+							ItemAttributes itemAttributes = vehicle.GetComponent<ItemAttributes>();
+							string itemName = itemAttributes != null ? itemAttributes.GetField<string>("itemName") : "Vehicle";
+
+							AddEspElement(espData, cam, pgo.centerPoint, bounds, itemName, settings.c_VehicleEspColor, settings.f_EspRange, settings.b_Tracer);
+						}
+						catch (Exception ex)
+						{
+							Log.LogError("RenderExternalESP - Vehicle Failed: " + ex.ToString());
+						}
 					}
 				}
 
@@ -872,6 +936,7 @@ namespace REPX
 				{
 					UI.Checkbox(ref this._settingsData.b_EnemyNameEsp, "Enemy Name Esp", "Show names above highlighted enemies.");
 				}
+				UI.Checkbox(ref this._settingsData.b_VehicleEsp, "Vehicle ESP", "Highlight vehicles in the world.");
 				UI.Checkbox(ref this._settingsData.b_LaserESP, "Weapon Laser ESP", "Draws a laser from your gun to where it's aiming while holding it.");
 				UI.Checkbox(ref this._settingsData.b_extractionESP, "Extraction ESP", "Draws a box on the extraction point.");
 				UI.Checkbox(ref this._settingsData.b_truckESP, "Truck ESP", "Draws a box on truck.");
@@ -1234,6 +1299,16 @@ namespace REPX
 			bool flag = this._settingsData != null;
 			if (flag)
 			{
+				UI.Checkbox(ref this._settingsData.b_UnlockAllCosmetics, "Unlock All Cosmetics", "Makes all cosmetics appear unlocked in the cosmetics menu without modifying your save.");
+					UI.Button("Unlock All Cosmetics Permanently", "Permanently unlocks all cosmetics and saves to your profile.", () =>
+					{
+						if (MetaManager.instance != null)
+						{
+							MetaManager.instance.CosmeticUnlockAll();
+							MetaManager.instance.Save();
+						}
+					});
+
 				// Use cached isMainMenu
 				bool flag2 = !PlayerAvatarPatch.Cache.isMainMenu;
 				if (flag2)
@@ -1272,6 +1347,7 @@ namespace REPX
 				UI.ColorPicker(ref this._settingsData.c_ItemEspColorDrone, "Drone Esp Color");
 				UI.ColorPicker(ref this._settingsData.c_CartEspColor, "Cart Esp Color");
 				UI.ColorPicker(ref this._settingsData.c_WeaponEspColor, "Weapon Esp Color");
+				UI.ColorPicker(ref this._settingsData.c_VehicleEspColor, "Vehicle Esp Color");
 			}
 		}
 
