@@ -41,7 +41,7 @@ namespace REPX.Patches.Game.Player
 		// Token: 0x06000074 RID: 116 RVA: 0x00006290 File Offset: 0x00004490
 		[HarmonyPatch("TumbleSetRPC")]
 		[HarmonyPrefix]
-		private static bool TumbleSetRPC_Prefix(PlayerTumble __instance, bool _isTumbling, bool _playerInput, PhotonMessageInfo _info)
+		private static bool TumbleSetRPC_Prefix(PlayerTumble __instance, bool _isTumbling, bool _playerInput, int _stateRevision, PhotonMessageInfo _info)
 		{
 			bool flag = !__instance.playerAvatar.IsLocalPlayer();
 			bool flag2;
@@ -54,6 +54,8 @@ namespace REPX.Patches.Game.Player
 				bool flag3 = Settings.Instance.SettingsData.b_NoTumble && !PlayerTumblePatch._byLocalPlayer;
 				if (flag3)
 				{
+					// Keep the local revision in step with the master so later tumble requests aren't rejected as stale.
+					__instance.SetField("tumbleStateRevision", _stateRevision);
 					bool flag4 = SemiFunc.IsMultiplayer();
 					if (flag4)
 					{
@@ -74,7 +76,7 @@ namespace REPX.Patches.Game.Player
 		// Token: 0x06000075 RID: 117 RVA: 0x000062FC File Offset: 0x000044FC
 		private static void ReSyncTumbleState(PlayerTumble __instance)
 		{
-			__instance.GetField<PhotonView>("photonView").RPC("TumbleSetRPC", RpcTarget.MasterClient, new object[] { false, true });
+			__instance.GetField<PhotonView>("photonView").RPC("TumbleSetRPC", RpcTarget.MasterClient, new object[] { false, true, __instance.GetField<int>("tumbleStateRevision") });
 		}
 
 		// Token: 0x0400002A RID: 42

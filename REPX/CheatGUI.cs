@@ -796,7 +796,7 @@ namespace REPX
 						{
 							flag11 = true;
 						}
-						playerAvatar4.photonView.RPC("ChatMessageSendRPC", RpcTarget.All, new object[] { this._chatMessage, flag11 });
+						playerAvatar4.photonView.RPC("ChatMessageSendRPC", RpcTarget.All, new object[] { this._chatMessage, flag11, (LocalizationManager.instance != null) ? LocalizationManager.instance.TTSLocaleGetCode() : "en-US" });
 						this._msgTime = 0f;
 					}
 				}

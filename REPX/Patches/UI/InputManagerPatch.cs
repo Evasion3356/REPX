@@ -83,7 +83,7 @@ namespace REPX.Patches.UI
 				bool flag2;
 				if (flag)
 				{
-					flag2 = key == InputKey.Chat || key == InputKey.Confirm || key == InputKey.ChatDelete;
+					flag2 = key == InputKey.Chat || key == InputKey.ChatConfirm || key == InputKey.ChatDelete;
 					flag = flag2;
 				}
 				bool flag3 = flag;

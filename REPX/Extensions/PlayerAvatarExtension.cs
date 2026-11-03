@@ -39,7 +39,7 @@ namespace REPX.Extensions
 			bool flag = SemiFunc.IsMultiplayer();
 			if (flag)
 			{
-				pa.photonView.RPC("SpawnRPC", target, new object[] { pos, value });
+				pa.photonView.RPC("SpawnRPC", target, new object[] { pos, value, false });
 			}
 			else
 			{
