@@ -26,6 +26,7 @@ namespace REPX
 				public ValuableObject valuableObject;
 				public PhysGrabCart cart;
 				public ItemDrone drone;
+				public ItemOrbBattery chargingOrb;
 				public ItemUpgrade upgrade;
 				public ItemMelee melee;
 				public ItemGun gun;
@@ -35,6 +36,7 @@ namespace REPX
 				public bool isGun;
 				public bool isMelee;
 				public bool isDrone;
+				public bool isChargingOrb;
 				public bool isUpgrade;
 				public bool isValuableBox;
 			public bool isActive;
@@ -194,6 +196,7 @@ namespace REPX
 			ItemGun gun = physGrabObject.GetComponent<ItemGun>();
 			ItemAttributes itemAttributes = physGrabObject.GetComponent<ItemAttributes>();
 			ItemDrone drone = physGrabObject.GetComponent<ItemDrone>();
+			ItemOrbBattery chargingOrb = physGrabObject.GetComponent<ItemOrbBattery>();
 			ItemUpgrade upgrade = physGrabObject.GetComponent<ItemUpgrade>();
 			ItemMelee melee = physGrabObject.GetComponent<ItemMelee>();
 			CosmeticWorldObject cosmeticWorldObject = physGrabObject.GetComponent<CosmeticWorldObject>();
@@ -204,6 +207,7 @@ namespace REPX
 					valuableObject = valuableObject,
 					cart = cart,
 					drone = drone,
+					chargingOrb = chargingOrb,
 					upgrade = upgrade,
 					melee = melee,
 					gun = gun,
@@ -214,6 +218,7 @@ namespace REPX
 					isUpgrade = upgrade != null,
 					isMelee = melee != null,
 					isDrone = drone != null,
+					isChargingOrb = chargingOrb != null,
 					isValuableBox = cosmeticWorldObject != null,
 				isActive = physGrabObject.GetField<bool>("isActive"),
 				lastFrameUpdated = _currentFrame
@@ -460,6 +465,13 @@ namespace REPX
 
 							// Drones
 							if (cache.isDrone && cache.itemAttributes != null)
+							{
+								string itemName = cache.itemAttributes.GetField<string>("itemName");
+								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, itemName, settings.c_ItemEspColorDrone, settings.f_EspRange, settings.b_Tracer);
+							}
+
+							// Charging Orb
+							if (cache.isChargingOrb && cache.itemAttributes != null)
 							{
 								string itemName = cache.itemAttributes.GetField<string>("itemName");
 								AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, itemName, settings.c_ItemEspColorDrone, settings.f_EspRange, settings.b_Tracer);
