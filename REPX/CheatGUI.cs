@@ -39,6 +39,7 @@ namespace REPX
 				public bool isChargingOrb;
 				public bool isUpgrade;
 				public bool isValuableBox;
+				public bool isLarva;
 			public bool isActive;
 			public int lastFrameUpdated;
 		}
@@ -228,6 +229,7 @@ namespace REPX
 					isDrone = drone != null,
 					isChargingOrb = chargingOrb != null,
 					isValuableBox = cosmeticWorldObject != null,
+					isLarva = physGrabObject.GetComponent<Larva>() != null,
 				isActive = physGrabObject.GetField<bool>("isActive"),
 				lastFrameUpdated = _currentFrame
 			};
@@ -379,6 +381,32 @@ namespace REPX
 						catch (Exception ex)
 						{
 							Log.LogError("RenderExternalESP - Enemy Failed: " + ex.ToString());
+						}
+					}
+				}
+
+				// Render Larvae (spitting map hazard spawned by LarvaPimpleSpawner, not an Enemy)
+				if (settings.b_EnemyEsp && !PlayerAvatarPatch.Cache.runIsLobby)
+				{
+					foreach (PhysGrabObject physGrabObject in MonoHelper.CatchedPhysGrabObjects)
+					{
+						try
+						{
+							if (physGrabObject == null) continue;
+
+							PhysGrabObjectCache cache = GetOrCreateCache(physGrabObject);
+							if (!cache.isLarva || !cache.isActive) continue;
+
+							float distance = Vector3.Distance(physGrabObject.centerPoint, cam.transform.parent.position);
+							if (distance > settings.f_EspRange) continue;
+							var bounds = CalculateObjectBounds(physGrabObject, distance);
+
+							string name = settings.b_EnemyNameEsp ? "Larva" : string.Empty;
+							AddEspElement(espData, cam, physGrabObject.centerPoint, bounds, name, settings.c_EnemyEspColor, settings.f_EspRange, settings.b_Tracer);
+						}
+						catch (Exception ex)
+						{
+							Log.LogError("RenderExternalESP - Larva Failed: " + ex.ToString());
 						}
 					}
 				}
