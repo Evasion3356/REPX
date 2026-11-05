@@ -27,6 +27,16 @@ namespace REPX.Data
 			}
 		}
 
+		// Persists the current settings and drops the singleton, so the next access (a re-injection) reloads from disk.
+		internal static void Reset()
+		{
+			if (Settings._instance != null)
+			{
+				Settings._instance.SaveSettings();
+				Settings._instance = null;
+			}
+		}
+
 		// Token: 0x060000A9 RID: 169 RVA: 0x00007098 File Offset: 0x00005298
 		internal Settings()
 		{

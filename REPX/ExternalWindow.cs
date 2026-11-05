@@ -19,6 +19,7 @@ namespace REPX
 		private const int WS_VISIBLE = 0x10000000;
 		private const int WM_PAINT = 0x000F;
 		private const int WM_DESTROY = 0x0002;
+		private const uint WM_CLOSE = 0x0010;
 		private const int WM_ERASEBKGND = 0x0014;
 		private const uint WM_USER = 0x0400;
 		private const uint WM_USER_INVALIDATE = WM_USER + 1;
@@ -91,8 +92,14 @@ namespace REPX
 		}
 
 		// Win32 imports
-		[DllImport("user32.dll")]
+		[DllImport("user32.dll", SetLastError = true)]
 		private static extern ushort RegisterClass(ref WNDCLASS lpWndClass);
+
+		[DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+		private static extern bool UnregisterClass(string lpClassName, IntPtr hInstance);
+
+		[DllImport("kernel32.dll", CharSet = CharSet.Auto)]
+		private static extern IntPtr GetModuleHandle(string lpModuleName);
 
 		[DllImport("user32.dll")]
 		private static extern IntPtr CreateWindowEx(
@@ -236,7 +243,12 @@ namespace REPX
 		internal static IntPtr hWnd;
 		private IntPtr gameWindow;
 		private WndProc wndProcDelegate;
-		private bool isRunning;
+		private string className;
+		// volatile: written by the window thread (WM_DESTROY), read by the message loop.
+		private volatile bool isRunning;
+		// Window classes are process-wide and outlive an unload (the injected assembly can't be freed), so every
+		// run registers its own class name and unregisters it when the window thread exits.
+		private static int _classCounter;
 		private RECT lastGameRect;
 
 		// Double buffering
@@ -498,6 +510,7 @@ namespace REPX
 					}
 
 					isRunning = false;
+					ExternalWindow.hWnd = IntPtr.Zero;
 					PostQuitMessage(0);
 					return IntPtr.Zero;
 					
@@ -541,14 +554,19 @@ namespace REPX
 
 				wndProcDelegate = new WndProc(MyWndProc);
 				
+				IntPtr moduleHandle = GetModuleHandle(null);
+				className = "REPXOverlayClass_" + Environment.TickCount.ToString("X") + "_" + (++_classCounter);
+
 				WNDCLASS wc = new WNDCLASS();
 				wc.lpfnWndProc = Marshal.GetFunctionPointerForDelegate(wndProcDelegate);
-				wc.lpszClassName = "REPXOverlayClass";
+				wc.hInstance = moduleHandle;
+				wc.lpszClassName = className;
 
 				ushort classAtom = RegisterClass(ref wc);
 				if (classAtom == 0)
 				{
-					Log.LogError("Failed to register window class");
+					Log.LogError("Failed to register window class (Win32 error " + Marshal.GetLastWin32Error() + ")");
+					className = null;
 					return;
 				}
 
@@ -644,16 +662,64 @@ namespace REPX
 			{
 				Log.LogError("ExternalWindow.Run error: " + ex.ToString());
 			}
+			finally
+			{
+				Cleanup();
+			}
 		}
 
-		public void Close()
+		// Runs on the window thread: a window can only be destroyed by the thread that created it.
+		private void Cleanup()
 		{
+			isRunning = false;
 			if (hWnd != IntPtr.Zero)
 			{
-				isRunning = false;
 				DestroyWindow(hWnd);
 				hWnd = IntPtr.Zero;
 			}
+			if (className != null)
+			{
+				if (!UnregisterClass(className, GetModuleHandle(null)))
+				{
+					Log.LogWarning("Failed to unregister window class " + className + " (Win32 error " + Marshal.GetLastWin32Error() + ")");
+				}
+				className = null;
+			}
+			// WM_DESTROY normally frees these, but not if the window was never created or the loop was broken early.
+			if (_clearBrush != IntPtr.Zero) { DeleteObject(_clearBrush); _clearBrush = IntPtr.Zero; }
+			if (_backBuffer != IntPtr.Zero) { DeleteObject(_backBuffer); _backBuffer = IntPtr.Zero; }
+			if (_backBufferDC != IntPtr.Zero) { DeleteDC(_backBufferDC); _backBufferDC = IntPtr.Zero; }
+			_bufferWidth = 0;
+			_bufferHeight = 0;
+			wndProcDelegate = null;
+		}
+
+		// Safe to call from any thread: asks the window thread to close the window itself (WM_CLOSE -> DestroyWindow ->
+		// WM_DESTROY ends the message loop). DestroyWindow called from another thread just fails.
+		public void Close()
+		{
+			IntPtr handle = hWnd;
+			if (handle != IntPtr.Zero)
+			{
+				PostMessage(handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+			}
+		}
+
+		// Drops everything static so a later injection starts from a clean slate.
+		internal static void ResetStatics()
+		{
+			OnRender = null;
+			lock (_renderDataLock)
+			{
+				_currentRenderData.Clear();
+				_nextRenderData.Clear();
+				_dataReady = false;
+			}
+			lock (_renderLock)
+			{
+				_shouldRender = false;
+			}
+			_frameCounter = 0;
 		}
 
 		internal static uint ColorToBGR(Color color)

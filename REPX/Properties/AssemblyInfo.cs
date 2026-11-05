@@ -4,10 +4,10 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
 
-[assembly: AssemblyVersion("1.0.0.0")]
+// AssemblyVersion / AssemblyFileVersion / AssemblyInformationalVersion are generated from the build time by the
+// GenerateBuildStamp target in REPX.csproj (obj\...\BuildStamp.g.cs).
+
 [assembly: AssemblyCompany("REPX")]
 [assembly: AssemblyConfiguration("Debug")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
-[assembly: AssemblyInformationalVersion("1.0.0")]
 [assembly: AssemblyProduct("REPX")]
 [assembly: AssemblyTitle("REPX")]

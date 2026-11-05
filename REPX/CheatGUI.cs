@@ -74,10 +74,16 @@ namespace REPX
 		private void OnDestroy()
 		{
 			this._initialized = false;
-			Harmony harmony = CheatGUI.harmony;
-			if (harmony != null)
+			// A duplicate that Awake() rejected must not tear down the patches/instance of the live menu.
+			if (CheatGUI.Instance == this)
 			{
-				harmony.UnpatchAll(CheatGUI.GUID);
+				Harmony harmony = CheatGUI.harmony;
+				if (harmony != null)
+				{
+					harmony.UnpatchAll(CheatGUI.GUID);
+				}
+				CheatGUI.harmony = null;
+				CheatGUI.Instance = null;
 			}
 			this._settingsData = null;
 			this._physGrabObjectCache.Clear();
@@ -1146,74 +1152,62 @@ namespace REPX
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeHealth, "Health Upgrade", "Upgrade Health", (str, num) =>
 				{
-					stats.playerUpgradeHealth[str] += num;
-					PunManager.instance.InvokeMethod("UpdateHealthRightAway", new object[] { str, num });
+					ApplyUpgrade(stats.playerUpgradeHealth, "Health", str, num, "UpgradePlayerHealth", "UpdateHealthRightAway");
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeStrength, "Grab Strength Upgrade", "Upgrade Grab Strength", (str, num) =>
 				{
-					stats.playerUpgradeStrength[str] += num;
-					PunManager.instance.InvokeMethod("UpdateGrabStrengthRightAway", new object[] { str, num });
+					ApplyUpgrade(stats.playerUpgradeStrength, "Strength", str, num, "UpgradePlayerGrabStrength", "UpdateGrabStrengthRightAway");
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeStamina, "Sprint Energy", "Upgrade Energy", (str, num) =>
 				{
-					stats.playerUpgradeStamina[str] += num;
-					PunManager.instance.InvokeMethod("UpdateEnergyRightAway", new object[] { str, num });
+					ApplyUpgrade(stats.playerUpgradeStamina, "Stamina", str, num, "UpgradePlayerEnergy", "UpdateEnergyRightAway");
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeSpeed, "Sprint Speed Upgrade", "Upgrade Sprint Speed", (str, num) =>
 				{
-					stats.playerUpgradeSpeed[str] += num;
-					PunManager.instance.InvokeMethod("UpdateSprintSpeedRightAway", new object[] { str, num });
+					ApplyUpgrade(stats.playerUpgradeSpeed, "Speed", str, num, "UpgradePlayerSprintSpeed", "UpdateSprintSpeedRightAway");
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeExtraJump, "Extra Jump Upgrade", "Upgrade Extra Jump", (str, num) =>
 				{
-					stats.playerUpgradeExtraJump[str] += num;
-					PunManager.instance.InvokeMethod("UpdateExtraJumpRightAway", new object[] { str, num });
+					ApplyUpgrade(stats.playerUpgradeExtraJump, "ExtraJump", str, num, "UpgradePlayerExtraJump", "UpdateExtraJumpRightAway");
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeRange, "Grab Range Upgrade", "Upgrade Grab Range", (str, num) =>
 				{
-					stats.playerUpgradeRange[str] += num;
-					PunManager.instance.InvokeMethod("UpdateGrabRangeRightAway", new object[] { str, num });
+					ApplyUpgrade(stats.playerUpgradeRange, "Range", str, num, "UpgradePlayerGrabRange", "UpdateGrabRangeRightAway");
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeCrouchRest, "Crouch Rest Upgrade", "Upgrade Crouch Rest", (str, num) =>
 				{
-					stats.playerUpgradeCrouchRest[str] += num;
-					PunManager.instance.InvokeMethod("UpdateCrouchRestRightAway", new object[] { str, num });
+					ApplyUpgrade(stats.playerUpgradeCrouchRest, "CrouchRest", str, num, "UpgradePlayerCrouchRest", "UpdateCrouchRestRightAway");
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeTumbleWings, "Tumble Wings Upgrade", "Upgrade Tumble Wings", (str, num) =>
 				{
-					stats.playerUpgradeTumbleWings[str] += num;
-					PunManager.instance.InvokeMethod("UpdateTumbleWingsRightAway", new object[] { str, num });
+					ApplyUpgrade(stats.playerUpgradeTumbleWings, "TumbleWings", str, num, "UpgradePlayerTumbleWings", "UpdateTumbleWingsRightAway");
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeTumbleClimb, "Tumble Climb Upgrade", "Upgrade Tumble Climb", (str, num) =>
 				{
-					stats.playerUpgradeTumbleClimb[str] += num;
-					PunManager.instance.InvokeMethod("UpdateTumbleClimbRightAway", new object[] { str, num });
+					ApplyUpgrade(stats.playerUpgradeTumbleClimb, "TumbleClimb", str, num, "UpgradePlayerTumbleClimb", "UpdateTumbleClimbRightAway");
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeLaunch, "Tumble Launch Upgrade", "Upgrade Tumble Launch", (str, num) =>
 				{
-					stats.playerUpgradeLaunch[str] += num;
-					PunManager.instance.InvokeMethod("UpdateTumbleLaunchRightAway", new object[] { str, num });
+					ApplyUpgrade(stats.playerUpgradeLaunch, "Launch", str, num, "UpgradePlayerTumbleLaunch", "UpdateTumbleLaunchRightAway");
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeDeathHeadBattery, "Death Head Battery Upgrade", "Upgrade Death Head Battery", (str, num) =>
 				{
-					stats.playerUpgradeDeathHeadBattery[str] += num;
-					PunManager.instance.InvokeMethod("UpdateDeathHeadBatteryRightAway", new object[] { str, num });
+					ApplyUpgrade(stats.playerUpgradeDeathHeadBattery, "DeathHeadBattery", str, num, "UpgradeDeathHeadBattery", "UpdateDeathHeadBatteryRightAway");
 				});
 
 				this.DrawUpgradeButton(selectedPlayers, stats.playerUpgradeMapPlayerCount, "Player Map Count Upgrade", "Upgrade Player Map Count", (str, num) =>
 				{
-					stats.playerUpgradeMapPlayerCount[str] += num;
-					PunManager.instance.InvokeMethod("UpdateMapPlayerCountRightAway", new object[] { str, num });
+					ApplyUpgrade(stats.playerUpgradeMapPlayerCount, "MapPlayerCount", str, num, "UpgradeMapPlayerCount", "UpdateMapPlayerCountRightAway");
 				});
 			}
 		}
@@ -1241,6 +1235,30 @@ namespace REPX
 					playerAvatar.OutroExploit();
 				}
 			});
+		}
+
+		// Host: send the game's upgrade RPC (same one the /upgrade console command uses) to everyone, including ourselves.
+		// Singleplayer: call the game's upgrade method directly.
+		// Client: the server rejects upgrade RPCs from non-masters, so only set the stat and apply it locally.
+		private static void ApplyUpgrade(Dictionary<string, int> upgradeDict, string statName, string steamId, int amount, string upgradeMethod, string rightAwayMethod)
+		{
+			if (SemiFunc.IsMasterClientOrSingleplayer())
+			{
+				if (SemiFunc.IsMultiplayer())
+				{
+					PhotonView photonView = PunManager.instance.GetField<PhotonView>("photonView");
+					photonView.RPC("TesterUpgradeCommandRPC", RpcTarget.All, new object[] { steamId, statName, amount });
+				}
+				else
+				{
+					PunManager.instance.InvokeMethod(upgradeMethod, new object[] { steamId, amount });
+				}
+				return;
+			}
+			upgradeDict.TryGetValue(steamId, out int current);
+			int newValue = Math.Max(0, current + amount);
+			upgradeDict[steamId] = newValue;
+			PunManager.instance.InvokeMethod(rightAwayMethod, new object[] { steamId, newValue - current });
 		}
 
 		private void DrawUpgradeButton(List<PlayerAvatar> selectedPlayers, Dictionary<string, int> upgradeDict, string label, string tooltip, Action<string, int> upgradeAction)

@@ -37,6 +37,14 @@ namespace REPX.Patches.Game.Player
 		// Flag to track if we've already calculated for this level
 		private static bool hasCalculatedForCurrentLevel = false;
 
+		// Called on unload so a re-injection recalculates everything for the current level.
+		internal static void ResetState()
+		{
+			Cache = new SemiFuncCache();
+			ClosestExtractionPoint = null;
+			hasCalculatedForCurrentLevel = false;
+		}
+
 		[HarmonyPatch("Awake")]
 		[HarmonyPostfix]
 		private static void Start_Postfix(PlayerAvatar __instance)

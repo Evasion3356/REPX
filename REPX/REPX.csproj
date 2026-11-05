@@ -188,6 +188,26 @@
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- Mono treats an injected assembly with the same name+version as one it already has loaded and hands back the old
+       copy, so a rebuilt DLL could never be re-injected without restarting the game. Stamp every build with its build
+       time: version 1.MMDD.HHMM.SSmmm (each part must stay <= 65534) and the full time as the informational version. -->
+  <Target Name="GenerateBuildStamp" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <BuildStampNow>$([System.DateTime]::Now.ToString('MM-dd-yyyy HH:mm:ss:fff'))</BuildStampNow>
+      <BuildStampVersion>1.$([System.DateTime]::Now.ToString('MMdd')).$([System.DateTime]::Now.ToString('HHmm')).$([System.DateTime]::Now.ToString('ssfff'))</BuildStampVersion>
+      <BuildStampFile>$(IntermediateOutputPath)BuildStamp.g.cs</BuildStampFile>
+    </PropertyGroup>
+    <ItemGroup>
+      <BuildStampLines Include="using System.Reflection%3B" />
+      <BuildStampLines Include="[assembly: AssemblyVersion(&quot;$(BuildStampVersion)&quot;)]" />
+      <BuildStampLines Include="[assembly: AssemblyFileVersion(&quot;$(BuildStampVersion)&quot;)]" />
+      <BuildStampLines Include="[assembly: AssemblyInformationalVersion(&quot;$(BuildStampNow)&quot;)]" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(BuildStampFile)" Lines="@(BuildStampLines)" Overwrite="true" />
+    <ItemGroup>
+      <Compile Include="$(BuildStampFile)" />
+    </ItemGroup>
+  </Target>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>

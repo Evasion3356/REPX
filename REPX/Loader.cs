@@ -1,6 +1,9 @@
-﻿using REPX.Helpers;
+﻿using REPX.Data;
+using REPX.Helpers;
+using REPX.Patches.Game.Player;
 using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using UnityEngine;
@@ -23,12 +26,65 @@ namespace REPX
 
 		public static void Load()
 		{
+			// Injected twice without unloading: tear the first instance down so we don't stack menus/windows/patches.
+			if (cheatGUI != null || externalWindowThread != null)
+			{
+				Unload();
+			}
+
 			Log.Clear();
+			LogBuildInfo();
+			AppDomain.CurrentDomain.AssemblyResolve -= ResolveEmbeddedAssembly;
 			AppDomain.CurrentDomain.AssemblyResolve += ResolveEmbeddedAssembly;
 			SetupMenu();
 			MonoHelper.Init();
 			StartExternalWindow();
-			Log.LogInfo("Injection successful!", "Log");
+			Log.LogInfo("Injection successful! REPX Harmony patches active: " + CountActivePatches(), "Log");
+		}
+
+		// Identifies which build is actually running. The build time/version is stamped on every compile, so if it doesn't
+		// change after you rebuild and reinject, Mono handed back the old loaded assembly. More than one REPX assembly in the
+		// domain means earlier injections are still resident (expected: they can't be freed).
+		private static void LogBuildInfo()
+		{
+			try
+			{
+				Assembly self = typeof(Loader).Assembly;
+				int copies = 0;
+				foreach (Assembly a in AppDomain.CurrentDomain.GetAssemblies())
+				{
+					if (a.GetName().Name == self.GetName().Name) copies++;
+				}
+				Log.LogInfo("Built " + FileVersionInfoOrStamp(self) + " | version " + self.GetName().Version + " | MVID " + self.ManifestModule.ModuleVersionId
+					+ " | REPX assemblies in domain: " + copies
+					+ " | REPX Harmony patches active before load: " + CountActivePatches(), "Build");
+			}
+			catch (Exception ex)
+			{
+				Log.LogError("Failed to log build info: " + ex.Message);
+			}
+		}
+
+		// Harmony keeps a method in GetAllPatchedMethods() even after every patch on it was removed, so count only the
+		// methods that still carry one of our patches.
+		private static int CountActivePatches()
+		{
+			int count = 0;
+			foreach (MethodBase method in HarmonyLib.Harmony.GetAllPatchedMethods().ToList())
+			{
+				HarmonyLib.Patches info = HarmonyLib.Harmony.GetPatchInfo(method);
+				if (info != null && info.Owners.Contains(CheatGUI.GUID))
+				{
+					count++;
+				}
+			}
+			return count;
+		}
+
+		private static string FileVersionInfoOrStamp(Assembly assembly)
+		{
+			object[] attrs = assembly.GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false);
+			return attrs.Length > 0 ? ((AssemblyInformationalVersionAttribute)attrs[0]).InformationalVersion : "unknown";
 		}
 
 		private static void SetupMenu()
@@ -129,60 +185,70 @@ namespace REPX
 
 		public static void Unload()
 		{
-			if (externalWindow != null)
+			// Managed assemblies injected into Unity's Mono root domain can't be freed (there is no FreeLibrary
+			// equivalent), so "unloading" means undoing everything we did and leaving every static in a state a
+			// later Load() can start from. Nothing here may null out static fields: Mono keeps the old assembly
+			// loaded and doesn't re-run static initializers on a re-injection.
+			try
 			{
-				externalWindow.Close();
-				externalWindow = null;
+				ShutdownExternalWindow();
+			}
+			catch (Exception ex)
+			{
+				Log.LogError("Error shutting down external window: " + ex.ToString());
 			}
 
-			if (externalWindowThread != null && externalWindowThread.IsAlive)
+			try
 			{
-				try
+				if (cheatGUI != null)
 				{
-					externalWindowThread.Abort();
-					// Give the thread a moment to abort gracefully
-					if (!externalWindowThread.Join(1000))
-					{
-						Log.LogWarning("External window thread did not terminate within timeout");
-					}
+					// OnDestroy removes the Harmony patches.
+					UnityEngine.Object.DestroyImmediate(cheatGUI.gameObject);
+					cheatGUI = null;
 				}
-				catch (Exception ex)
-				{
-					Log.LogError("Error aborting external window thread: " + ex.ToString());
-				}
-				externalWindowThread = null;
 			}
-
-			if (cheatGUI != null)
+			catch (Exception ex)
 			{
-				UnityEngine.Object.DestroyImmediate(cheatGUI.gameObject);
+				Log.LogError("Error destroying menu: " + ex.ToString());
 			}
 
-			MonoHelper.Dispose();
-			PurgeAssembly();
+			try
+			{
+				MonoHelper.Dispose();
+				PlayerAvatarPatch.ResetState();
+				Settings.Reset();
+				ExternalWindow.ResetStatics();
+			}
+			catch (Exception ex)
+			{
+				Log.LogError("Error resetting state: " + ex.ToString());
+			}
+
 			AppDomain.CurrentDomain.AssemblyResolve -= ResolveEmbeddedAssembly;
+			Log.LogInfo("Unloaded.", "Log");
 		}
 
-		public static void PurgeAssembly()
+		private static void ShutdownExternalWindow()
 		{
-			Assembly assembly = typeof(Loader).Assembly;
-			foreach (Type type in assembly.GetTypes())
+			if (externalWindow != null)
 			{
-				foreach (FieldInfo fieldInfo in type.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+				// Asks the window thread to destroy its own window and unregister its class.
+				externalWindow.Close();
+			}
+
+			Thread thread = externalWindowThread;
+			if (thread != null && thread.IsAlive)
+			{
+				if (!thread.Join(2000))
 				{
-					if (!fieldInfo.IsInitOnly && fieldInfo.FieldType.IsClass)
-					{
-						try
-						{
-							fieldInfo.SetValue(null, null);
-						}
-						catch
-						{
-							// Ignore errors during cleanup
-						}
-					}
+					Log.LogWarning("External window thread did not exit in time, aborting it");
+					thread.Abort();
+					thread.Join(1000);
 				}
 			}
+
+			externalWindow = null;
+			externalWindowThread = null;
 		}
 
 		private static Assembly ResolveEmbeddedAssembly(object sender, ResolveEventArgs args)

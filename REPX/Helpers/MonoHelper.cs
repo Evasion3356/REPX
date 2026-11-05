@@ -35,9 +35,13 @@ namespace REPX.Helpers
 		{
 			MonoHelper.CatchedPhysGrabObjects.Clear();
 			MonoHelper.CatchedItemVehicles.Clear();
-			foreach (ExtendedPlayerData extendedPlayerData in ExtendedPlayerData._extendedPlayerData.Values)
+			// Snapshot first: each component's OnDestroy removes itself from the dictionary.
+			foreach (ExtendedPlayerData extendedPlayerData in new List<ExtendedPlayerData>(ExtendedPlayerData._extendedPlayerData.Values))
 			{
-				UnityEngine.Object.DestroyImmediate(extendedPlayerData);
+				if (extendedPlayerData != null)
+				{
+					UnityEngine.Object.DestroyImmediate(extendedPlayerData);
+				}
 			}
 			ExtendedPlayerData._extendedPlayerData.Clear();
 		}

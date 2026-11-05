@@ -36,12 +36,13 @@ namespace REPX.Patches.Game.Player
 						_antiTumbleGraceUntil = Time.unscaledTime + AntiTumbleGraceSeconds;
 						try
 						{
-							PlayerController.instance.GetField<object>("CollisionController").SetField("fallDistance", 0f);
+							PlayerController.instance.CollisionController.SetField("fallDistance", 0f);
 						}
 						catch (Exception e) { Debug.Log("[REPX/Tumble] fallDistance reset failed: " + e.Message); }
 					}
 					else if (_isTumbling && !_playerInput && Time.unscaledTime < _antiTumbleGraceUntil)
 					{
+						Log(__instance, "DROPPED involuntary tumble request (anti-tumble grace, " + (_antiTumbleGraceUntil - Time.unscaledTime).ToString("F2") + "s left)");
 						return false;
 					}
 				}
