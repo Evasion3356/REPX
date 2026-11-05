@@ -34,6 +34,7 @@ namespace REPX.Patches.Game.Player
 						// them next frame (fallDistance is still above its threshold), so clear it and hold off
 						// involuntary tumbles briefly.
 						_antiTumbleGraceUntil = Time.unscaledTime + AntiTumbleGraceSeconds;
+						TrackExitRequest(__instance);
 						try
 						{
 							PlayerController.instance.CollisionController.SetField("fallDistance", 0f);
@@ -66,6 +67,11 @@ namespace REPX.Patches.Game.Player
 		private static bool TumbleSetRPC_Prefix(PlayerTumble __instance, bool _isTumbling, bool _playerInput, int _stateRevision, PhotonMessageInfo _info)
 		{
 			Log(__instance, "TumbleSetRPC(tumbling=" + _isTumbling + ", input=" + _playerInput + ", rev=" + _stateRevision + ", byLocal=" + _byLocalPlayer + ")");
+			if (!_forcingExit && !_isTumbling && __instance.playerAvatar.IsLocalPlayer())
+			{
+				// The host finally agreed with us (or ended the tumble itself): nothing left to resync.
+				_resyncUntil = 0f;
+			}
 			bool flag = !__instance.playerAvatar.IsLocalPlayer();
 			bool flag2;
 			if (flag)
@@ -121,7 +127,10 @@ namespace REPX.Patches.Game.Player
 					+ " stunTimer=" + t.GetField<float>("tumbleStunTimer")
 					+ " reqTimer=" + t.GetField<float>("tumbleRequestTimer")
 					+ " master=" + SemiFunc.IsMasterClientOrSingleplayer()
-					+ " noTumble=" + Settings.Instance.SettingsData.b_NoTumble);
+					+ " noTumble=" + Settings.Instance.SettingsData.b_NoTumble
+					+ " antiTumble=" + Settings.Instance.SettingsData.b_AntiTumble
+					+ " graceLeft=" + (_antiTumbleGraceUntil - Time.unscaledTime).ToString("F2")
+					+ " settings#" + Settings.Instance.GetHashCode());
 			}
 			catch (Exception e) { Debug.Log("[REPX/Tumble] log failed: " + e.Message); }
 		}
@@ -135,6 +144,78 @@ namespace REPX.Patches.Game.Player
 		[HarmonyPrefix]
 		private static void TumbleSet_Log(PlayerTumble __instance, bool _isTumbling, bool _playerInput)
 			=> Log(__instance, "TumbleSet(tumbling=" + _isTumbling + ", input=" + _playerInput + ")");
+
+		// ---- Anti-Tumble: forced exit (client only) --------------------------------------------------------------------
+		// A client's exit request is decided by the host, which refuses it while ITS copy of our lock timers is
+		// running (we can't touch those). So on an exit press we apply the exit locally right away, exactly as the
+		// host's TumbleSetRPC would, and keep asking the host to confirm until it ends its own tumble state.
+		private const float ResyncSeconds = 10f;
+		private const float ResyncIntervalSeconds = 0.25f;
+		private static float _resyncUntil;
+		private static float _nextResync;
+		private static bool _forcingExit;
+
+		private static void TrackExitRequest(PlayerTumble tumble)
+		{
+			if (!Settings.Instance.SettingsData.b_AntiTumble || SemiFunc.IsMasterClientOrSingleplayer() || !SemiFunc.IsMultiplayer())
+				return;
+			if (!tumble.GetField<bool>("isTumbling"))
+				return;
+			ForceExit(tumble);
+		}
+
+		private static void ForceExit(PlayerTumble tumble)
+		{
+			try
+			{
+				int revision = tumble.GetField<int>("tumbleStateRevision");
+				Log(tumble, "FORCING local tumble exit");
+				// TumbleSetRPC only accepts the master as sender, so hand it the master as the sender.
+				PhotonMessageInfo info = new PhotonMessageInfo(PhotonNetwork.MasterClient, PhotonNetwork.ServerTimestamp, tumble.GetField<PhotonView>("photonView"));
+				_forcingExit = true;
+				_byLocalPlayer = true;
+				try
+				{
+					AccessTools.Method(typeof(PlayerTumble), "TumbleSetRPC").Invoke(tumble, new object[] { false, true, revision, info });
+				}
+				finally
+				{
+					_forcingExit = false;
+					_byLocalPlayer = false;
+				}
+				// Once we're out locally the game's own TumbleRequest returns early (state already matches), so it never
+				// tells the host. Send the exit request ourselves, now and then every ResyncIntervalSeconds (see Tick).
+				_resyncUntil = Time.unscaledTime + ResyncSeconds;
+				SendExitRequest(tumble);
+			}
+			catch (Exception e)
+			{
+				Debug.Log("[REPX/Tumble] forced exit failed: " + e);
+			}
+		}
+
+		// Called every frame from CheatGUI while Anti-Tumble is on. After a forced exit the game won't send further
+		// exit requests (we're no longer tumbling locally), so keep nudging the host until it ends its own tumble state.
+		internal static void Tick(PlayerTumble tumble)
+		{
+			if (_resyncUntil == 0f)
+				return;
+			float now = Time.unscaledTime;
+			if (now > _resyncUntil || !Settings.Instance.SettingsData.b_AntiTumble)
+			{
+				_resyncUntil = 0f;
+				return;
+			}
+			if (now < _nextResync)
+				return;
+			SendExitRequest(tumble);
+		}
+
+		private static void SendExitRequest(PlayerTumble tumble)
+		{
+			_nextResync = Time.unscaledTime + ResyncIntervalSeconds;
+			tumble.GetField<PhotonView>("photonView").RPC("TumbleRequestRPC", RpcTarget.MasterClient, new object[] { false, true, tumble.GetField<int>("tumbleStateRevision") });
+		}
 
 		// Token: 0x06000075 RID: 117 RVA: 0x000062FC File Offset: 0x000044FC
 		private static void ReSyncTumbleState(PlayerTumble __instance)
