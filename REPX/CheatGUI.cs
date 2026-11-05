@@ -90,8 +90,12 @@ namespace REPX
 
 		private void OnGUI()
 		{
-			// Collect and render ESP data for external window
-			RenderExternalESP();
+			// OnGUI fires once per GUI event (Layout, Repaint, mouse, keys...). Only build ESP data
+			// and repaint the overlay once per frame.
+			if (Event.current != null && Event.current.type == EventType.Repaint)
+			{
+				RenderExternalESP();
+			}
 
 			bool flag = !this._initialized;
 			if (!flag)
@@ -160,6 +164,10 @@ namespace REPX
 			// Prevent involuntary tumbling and allow immediate recovery
 			playerTumble.SetField("tumbleOverride", false);
 			playerControllerInstance.SetField("tumbleInputDisableTimer", 0f);
+			// Falls/enemies also lock the exit via these timers (checked by PlayerController.Update and TumbleRequestRPC).
+			playerControllerInstance.SetField("InputDisableTimer", 0f);
+			playerTumble.SetField("tumbleOverrideTimer", 0f);
+			playerTumble.SetField("tumbleStunTimer", 0f);
 
 			// Handle TumbleUI visibility
 			if (TumbleUI.instance)
@@ -390,6 +398,7 @@ namespace REPX
 							if (!cache.isActive) continue;
 
 							float distance = Vector3.Distance(physGrabObject.centerPoint, cam.transform.parent.position);
+							if (distance > settings.f_EspRange) continue;
 							var bounds = CalculateObjectBounds(physGrabObject, distance);
 
 							// Valuables

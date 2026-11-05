@@ -10,41 +10,32 @@ namespace REPX.Extensions
 	internal static class ReflectExtension
 	{
 		// Token: 0x06000099 RID: 153 RVA: 0x000069E8 File Offset: 0x00004BE8
-		internal static T GetField<T>(this object obj, string name)
+		// Allocation-free lookup (no per-call string concatenation); these run per object, per frame.
+		private static FieldInfo GetInstanceFieldInfo(Type type, string name)
 		{
-			string text = obj.GetType().FullName + ":" + name;
+			var key = (type, name);
 			FieldInfo fieldInfo;
-			bool flag = !ReflectExtension._fieldCache.TryGetValue(text, out fieldInfo);
-			if (flag)
+			if (!ReflectExtension._instanceFieldCache.TryGetValue(key, out fieldInfo))
 			{
-				FieldInfo field = obj.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
-				if (field == null)
+				fieldInfo = type.GetField(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
+				if (fieldInfo == null)
 				{
 					throw new MissingFieldException("Field '" + name + "' not found");
 				}
-				fieldInfo = field;
-				ReflectExtension._fieldCache[text] = fieldInfo;
+				ReflectExtension._instanceFieldCache[key] = fieldInfo;
 			}
-			return (T)((object)fieldInfo.GetValue(obj));
+			return fieldInfo;
+		}
+
+		internal static T GetField<T>(this object obj, string name)
+		{
+			return (T)((object)GetInstanceFieldInfo(obj.GetType(), name).GetValue(obj));
 		}
 
 		// Token: 0x0600009A RID: 154 RVA: 0x00006A6C File Offset: 0x00004C6C
 		internal static void SetField<T>(this object obj, string name, T value)
 		{
-			string text = obj.GetType().FullName + ":" + name;
-			FieldInfo fieldInfo;
-			bool flag = !ReflectExtension._fieldCache.TryGetValue(text, out fieldInfo);
-			if (flag)
-			{
-				FieldInfo field = obj.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
-				if (field == null)
-				{
-					throw new MissingFieldException("Field '" + name + "' not found");
-				}
-				fieldInfo = field;
-				ReflectExtension._fieldCache[text] = fieldInfo;
-			}
-			fieldInfo.SetValue(obj, value);
+			GetInstanceFieldInfo(obj.GetType(), name).SetValue(obj, value);
 		}
 
 		// Token: 0x0600009B RID: 155 RVA: 0x00006AEC File Offset: 0x00004CEC
@@ -214,6 +205,8 @@ namespace REPX.Extensions
 		private static readonly ConcurrentDictionary<string, PropertyInfo> _propertyCache = new ConcurrentDictionary<string, PropertyInfo>();
 
 		// Token: 0x04000034 RID: 52
+		private static readonly ConcurrentDictionary<(Type, string), FieldInfo> _instanceFieldCache = new ConcurrentDictionary<(Type, string), FieldInfo>();
+
 		private static readonly ConcurrentDictionary<string, MethodInfo> _methodCache = new ConcurrentDictionary<string, MethodInfo>();
 
 		// Token: 0x04000035 RID: 53

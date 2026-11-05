@@ -20,6 +20,12 @@ namespace REPX.Patches.Game.Player
 			if (!Settings.Instance.SettingsData.b_HearEveryone)
 				return;
 
+			// Only affect how we *play back* other players. In 0.5 inLobbyMixer on our own voice chat also
+			// switches voice transmission into "target every player" mode (re-resolved every 0.5s and
+			// rewriting recorder.TargetPlayers), which costs network traffic/lag.
+			if (__instance.GetField<Photon.Pun.PhotonView>("photonView").IsMine)
+				return;
+
 			// Safety check
 			if (PlayerController.instance == null || PlayerController.instance.playerAvatarScript == null)
 				return;
