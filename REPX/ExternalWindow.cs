@@ -159,7 +159,7 @@ namespace REPX
 		[DllImport("gdi32.dll")]
 		internal static extern bool Rectangle(IntPtr hdc, int left, int top, int right, int bottom);
 
-		[DllImport("gdi32.dll")]
+		[DllImport("gdi32.dll", CharSet = CharSet.Unicode, EntryPoint = "TextOutW")]
 		internal static extern bool TextOut(IntPtr hdc, int x, int y, string lpString, int c);
 
 		[DllImport("gdi32.dll")]

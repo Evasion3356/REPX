@@ -18,7 +18,7 @@ namespace REPX
 			public int cy;
 		}
 
-		[DllImport("gdi32.dll")]
+		[DllImport("gdi32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetTextExtentPoint32W")]
 		private static extern bool GetTextExtentPoint32(IntPtr hdc, string lpString, int c, out SIZE psizl);
 
 		[DllImport("gdi32.dll")]
