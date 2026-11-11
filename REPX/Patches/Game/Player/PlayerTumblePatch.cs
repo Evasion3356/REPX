@@ -26,7 +26,7 @@ namespace REPX.Patches.Game.Player
 			}
 			else
 			{
-				if (Settings.Instance.SettingsData.b_AntiTumble)
+				if (Settings.Instance.SettingsData.b_AntiTumble && !AntiTumbleSuspended)
 				{
 					if (!_isTumbling && _playerInput)
 					{
@@ -80,7 +80,8 @@ namespace REPX.Patches.Game.Player
 			}
 			else
 			{
-				bool flag3 = Settings.Instance.SettingsData.b_NoTumble && !PlayerTumblePatch._byLocalPlayer;
+				// Only block entering a tumble: refusing the host's exit would leave us stuck in its tumble state.
+				bool flag3 = Settings.Instance.SettingsData.b_NoTumble && _isTumbling && !PlayerTumblePatch._byLocalPlayer;
 				if (flag3)
 				{
 					// Keep the local revision in step with the master so later tumble requests aren't rejected as stale.
@@ -168,21 +169,7 @@ namespace REPX.Patches.Game.Player
 		{
 			try
 			{
-				int revision = tumble.GetField<int>("tumbleStateRevision");
-				Log(tumble, "FORCING local tumble exit");
-				// TumbleSetRPC only accepts the master as sender, so hand it the master as the sender.
-				PhotonMessageInfo info = new PhotonMessageInfo(PhotonNetwork.MasterClient, PhotonNetwork.ServerTimestamp, tumble.GetField<PhotonView>("photonView"));
-				_forcingExit = true;
-				_byLocalPlayer = true;
-				try
-				{
-					AccessTools.Method(typeof(PlayerTumble), "TumbleSetRPC").Invoke(tumble, new object[] { false, true, revision, info });
-				}
-				finally
-				{
-					_forcingExit = false;
-					_byLocalPlayer = false;
-				}
+				ApplyLocalExit(tumble);
 				// Once we're out locally the game's own TumbleRequest returns early (state already matches), so it never
 				// tells the host. Send the exit request ourselves, now and then every ResyncIntervalSeconds (see Tick).
 				_resyncUntil = Time.unscaledTime + ResyncSeconds;
@@ -192,6 +179,100 @@ namespace REPX.Patches.Game.Player
 			{
 				Debug.Log("[REPX/Tumble] forced exit failed: " + e);
 			}
+		}
+
+		// Ends the tumble on our side exactly as the host's TumbleSetRPC would.
+		private static void ApplyLocalExit(PlayerTumble tumble)
+		{
+			int revision = tumble.GetField<int>("tumbleStateRevision");
+			Log(tumble, "FORCING local tumble exit");
+			// TumbleSetRPC only accepts the master as sender, so hand it the master as the sender.
+			PhotonMessageInfo info = new PhotonMessageInfo(PhotonNetwork.MasterClient, PhotonNetwork.ServerTimestamp, tumble.GetField<PhotonView>("photonView"));
+			_forcingExit = true;
+			_byLocalPlayer = true;
+			try
+			{
+				AccessTools.Method(typeof(PlayerTumble), "TumbleSetRPC").Invoke(tumble, new object[] { false, true, revision, info });
+			}
+			finally
+			{
+				_forcingExit = false;
+				_byLocalPlayer = false;
+			}
+		}
+
+		// ---- Manual "Emit Tumble Exit" (menu button) ------------------------------------------------------------------
+		// Recovery for when we and the host disagree about whether we're tumbling (e.g. we're up locally but the host
+		// still has us tumbling, so the game never sends another exit request). Works regardless of Anti-Tumble.
+		internal static void EmitTumbleExit()
+		{
+			try
+			{
+				PlayerAvatar avatar = PlayerController.instance != null ? PlayerController.instance.playerAvatarScript : null;
+				PlayerTumble tumble = avatar != null ? avatar.GetField<PlayerTumble>("tumble") : null;
+				if (tumble == null)
+				{
+					Debug.Log("[REPX/Tumble] emit exit: no local player tumble");
+					return;
+				}
+				_resyncUntil = 0f;
+				if (SemiFunc.IsMasterClientOrSingleplayer())
+				{
+					// We are the authority: force a fresh "not tumbling" state out to everyone, even if we think it matches.
+					Log(tumble, "EMIT tumble exit (master): TumbleSet reset");
+					tumble.TumbleSet(false, true, true);
+					return;
+				}
+				if (tumble.GetField<bool>("isTumbling"))
+					ApplyLocalExit(tumble);
+				// An exit request flagged as NOT player input skips every host-side check (revision, override/stun
+				// timers, being grabbed), so the host ends its tumble state no matter what it thinks is going on.
+				Log(tumble, "EMIT tumble exit (client): unconditional TumbleRequestRPC");
+				tumble.GetField<PhotonView>("photonView").RPC("TumbleRequestRPC", RpcTarget.MasterClient, new object[] { false, false, tumble.GetField<int>("tumbleStateRevision") });
+			}
+			catch (Exception e)
+			{
+				Debug.Log("[REPX/Tumble] emit exit failed: " + e);
+			}
+		}
+
+		// ---- Anti-Tumble suspension ----------------------------------------------------------------------------------
+		// Set every frame by CheatGUI. While true Anti-Tumble stands down entirely (vehicle seats, zero-gravity crystal),
+		// because fighting the game's own intentional tumble there desyncs us from the host.
+		internal static bool AntiTumbleSuspended;
+
+		private static bool _zeroGravCrystalLatched;
+
+		// The desert zero-gravity crystal keeps its holder tumbling (host-side TumbleRequest + override every frame) and
+		// the float lingers a few seconds after release. Force-exiting during that leaves the host thinking we're
+		// still tumbling, so stay out of the way from the grab until the float has fully worn off.
+		internal static bool IsUnderZeroGravCrystal(PlayerAvatar avatar)
+		{
+			try
+			{
+				PhysGrabber grabber = avatar.physGrabber;
+				if (grabber != null && grabber.grabbed)
+				{
+					PhysGrabObject held = grabber.GetField<PhysGrabObject>("grabbedPhysGrabObject");
+					if (held != null && held.GetComponent<ValuableDesertZeroGravCrystal>() != null)
+					{
+						_zeroGravCrystalLatched = true;
+						return true;
+					}
+				}
+				if (_zeroGravCrystalLatched)
+				{
+					SemiAffectZeroGravity affect = avatar.activeZeroGravityAffect;
+					if (affect != null && affect.TimerNormalized() > 0f)
+						return true;
+					_zeroGravCrystalLatched = false;
+				}
+			}
+			catch (Exception e)
+			{
+				Debug.Log("[REPX/Tumble] crystal check failed: " + e.Message);
+			}
+			return false;
 		}
 
 		// Called every frame from CheatGUI while Anti-Tumble is on. After a forced exit the game won't send further

@@ -158,12 +158,18 @@ namespace REPX
 
 		private void DoAntiTumble()
 		{
+			PlayerTumblePatch.AntiTumbleSuspended = false;
 			if (this._settingsData?.b_AntiTumble != true) return;
 
 			PlayerController playerControllerInstance = PlayerController.instance;
 			if (playerControllerInstance == null || !LevelGenerator.Instance.Generated || playerControllerInstance.playerAvatarScript == null) return;
 
-			if (IsLocalPlayerInVehicle()) return;
+			// Stand down where the game tumbles us on purpose; fighting it there desyncs us from the host.
+			if (IsLocalPlayerInVehicle() || PlayerTumblePatch.IsUnderZeroGravCrystal(playerControllerInstance.playerAvatarScript))
+			{
+				PlayerTumblePatch.AntiTumbleSuspended = true;
+				return;
+			}
 
 			PlayerTumble playerTumble = playerControllerInstance.playerAvatarScript.GetField<PlayerTumble>("tumble");
 			if (playerTumble == null) return;
@@ -1011,6 +1017,10 @@ namespace REPX
 				UI.Checkbox(ref this._settingsData.b_AntiKnockBack, "Anti-Knock Back", "Prevents the local player from being able to be knocked back by force.");
 				UI.Checkbox(ref this._settingsData.b_AntiTumble, "Anti-Tumble", "Prevents input loss while tumbling and lets you always leave a tumble. As a client you leave the tumble immediately and the host catches up when its own lock ends.");
 				UI.Checkbox(ref this._settingsData.b_NoTumble, "No Tumble", "Prevents the local player from tumbling by unvoluntary action.");
+				UI.Button("Emit Tumble Exit", "Unconditionally tells the host you've left your tumble. Use it if you get stuck where the host thinks you're tumbling but you're not.", () =>
+				{
+					PlayerTumblePatch.EmitTumbleExit();
+				});
 				UI.Checkbox(ref this._settingsData.b_HearEveryone, "Hear Everyone", "Makes it where you can hear everyone no matter the range.");
 				UI.Checkbox(ref this._settingsData.b_deleteSaves, "Delete Saves", "If unchecked, your saves won't get deleted when every one dies or quitting the game when dead.");
 			}
